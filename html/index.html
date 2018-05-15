@@ -1,0 +1,509 @@
+<html>
+	<head>
+		<link href="main.css" rel="stylesheet">
+		<script type="text/javascript" src="ajax.js"></script>
+		<script type="text/javascript" src="aex.js"></script>
+		<script type="text/javascript">
+            window.addEventListener('load', docload)
+			function docload() {
+				get_main_stats()
+				get_last_blocks(-1)
+				init()
+			}
+		</script>
+	</head>
+<body class="body">
+	<table id="top">
+		<tr>
+			<td class="upper_left" rowspan=3>
+				<a href="https://afterether.org"><img id="logo_img" src="imgs/logo.jpg"></a><br/>
+				<a style="font-weight: bold; font-size: 1em; " class="link" href="https://afterether.org/aex.html">AfterEther Block Explorer</a><br>
+				<span class="logo_message">Support our project, <span class="buy">buy</span> our coins. Contribute and invest at the same time!</span>
+			</td>
+			<td id="top_stats_container" style="">
+				<table class="network_info">
+					<tbody>
+						<tr>
+							<td class="stats_label">Currency: </td>
+							<td class="stats_value" id="currency_name"></td>
+						</tr>
+						<tr>
+							<td class="stats_label">Ticker Symbol: </td>
+							<td class="stats_value" id="currency_ticker_sym"></td>
+						</tr>
+						<tr>
+							<td class="stats_label">Supply:</td>
+							<td class="stats_value" id="top_stats_supply"></td>
+						</tr>
+						<tr>
+							<td class="stats_label">Network: </td>
+							<td class="stats_value" id="network_name"></td>
+						</tr>
+					</tbody>
+				</table>
+			</td>
+			<td id="top_stats_container" style="">
+				<table class="network_info">
+					<tbody>
+						<tr>
+							<td class="stats_label">Difficulty: </td>
+							<td class="stats_value" id="top_stats_difficulty"></td>
+						</tr>
+						<tr>
+							<td class="stats_label">Hash rate:</td>
+							<td class="stats_value" id="top_stats_hash_rate"></td>
+						</tr>
+						<tr>
+							<td class="stats_label">Block time: </td>
+							<td class="stats_value" id="top_stats_block_time"></td>
+						</tr>
+						<tr>
+							<td class="stats_label">Last block: </td>
+							<td class="stats_value" id="top_stats_last_block"></td>
+						</tr>
+					</tbody>
+				</table>
+			</td>
+			<td id="top_stats_container" style="">
+				<table class="network_info">
+					<tbody>
+						<tr>
+							<td class="stats_label">TX/block:</td>
+							<td class="stats_value" id="top_stats_tx_per_block"></td>
+						</tr>
+						<tr>
+							<td class="stats_label">TX cost:</td>
+							<td class="stats_value" id="top_stats_tx_cost"></td>
+						</tr>
+						<tr>
+							<td class="stats_label">Gas price:</td>
+							<td class="stats_value" id="top_stats_gas_price"></td>
+						</tr>
+						<tr>
+							<td class="stats_label">Block reward:</td>
+							<td class="stats_value" id="top_stats_block_reward"></td>
+						</tr>
+						<tr>
+					</tbody>
+				</table>
+			</td>
+		</tr>
+		<tr>
+			<td colspan=3> 
+				<a class="net_stats_link" href="blockchain-statistics.html">Network Statistics</a>
+			</td>
+		</tr>
+		<tr>
+			<td colspan=3 style="text-align: center;">
+				<form id="search_form" action="javascript: exec_search()">
+					Search:
+					<input type="text" id="search_text" name="search_text" value="" width=30 placeholder="Block Number/Hash/Account address">
+					<input type="submit" value=" Go ">
+				</form>
+			</td>
+		<tr>
+		</tr>
+	</table>
+	<table class="block_line">
+		<tbody>
+		<tr>
+			<td><div id="next_block_line" class="block_line_buttons" onClick="next_block_line()">&#x25C4;</div></td>
+			<td><div id="last_blocks_container"></div></td>
+			<td><div id="prev_block_line" class="block_line_buttons" onClick="prev_block_line()">&#x25BA;</div></td>
+		</tr>
+		</tbody>
+	</table>
+	<div id="content_pane">
+		<div id="object_not_found">
+			Object not found
+		</div>
+		<section id="block_children">
+			<div id="block_header"><span id="block_header_block_num"></span></div>
+			<div class="tab_line">
+			<a id="tab_block_info" class="block_tab tab_unselected tab_block_info_selector" href="javascript: tab_click(1)">
+				<div class="tab_block_info_label">Block</div>
+			</>
+			<a id="tab_block_transactions" class="block_tab tab_unselected tab_block_transactions_selector" href="javascript: tab_click(2)">
+				<div class="tab_block_transactions_label">Transactions</div>
+			</a>
+			<a id="tab_block_value_transfers" class="block_tab tab_unselected tab_block_value_transfers_selector" href="javascript: tab_click(3)">
+				<div class="tab_block_value_transfers_label">Value Transfers</div>
+			</a>
+			<a id="tab_block_uncles" class="block_tab tab_unselected tab_block_uncles_selector" href="javascript: tab_click(4)">
+				<div class="tab_block_uncles_label">Uncles</div>
+			</a>
+			</div>
+			<div class="block_content">
+				<!--	<div class="clear_shadow"></div>-->
+			<div id="block_info">
+				<table>
+					<tr>
+						<td class="lbl_block">Number:</td>
+						<td class="fld_block" id="block_block_num"></td>
+					</tr>
+					<tr>
+						<td class="lbl_block">Hash:</td>
+						<td class="fld_block" id="block_hash"></td>
+					</tr>
+					<tr>
+						<td class="lbl_block">Confirmations:</td>
+						<td class="fld_block" id="block_confirmations"></td>
+					</tr>
+					<tr>
+						<td class="lbl_block">Timestamp</td>
+						<td class="fld_block" id="block_timestamp" class="fld_block"></td>
+					</tr>
+					<tr>
+						<td class="lbl_block">Datetime</td>
+						<td class="fld_block" id="block_datetime" class="fld_block"></td>
+					</tr>
+					<tr>
+						<td class="lbl_block">Miner</td>
+						<td class="fld_block" class="fld_block"><a href="" onClick="search_account(this); return false;" id="block_miner"></a></td>
+					</tr>
+					<tr>
+						<td class="lbl_block">Transactions</td>
+						<td class="fld_block" id="block_num_transactions" class="fld_block"></td>
+					</tr>
+					<tr>
+						<td class="lbl_block">Difficulty</td>
+						<td class="fld_block" id="block_difficulty" class="fld_block"></td>
+					</tr>
+					<tr>
+						<td class="lbl_block">Total Difficulty</td>
+					   	<td class="fld_block" id="block_total_difficulty"></td>
+					</tr>
+					<tr>
+						<td class="lbl_block">Gas Used</td>
+					   	<td class="fld_block" id="block_gas_used"></td>
+					</tr>
+					<tr>
+						<td class="lbl_block">Gas Limit</td>
+					   	<td class="fld_block" id="block_gas_limit"></td>
+					</tr>
+					<tr>
+						<td class="lbl_block">Size</td>
+					   	<td class="fld_block" id="block_size"></td>
+					</tr>
+					<tr>
+						<td class="lbl_block">Nonce</td>
+					   	<td class="fld_block" id="block_nonce"></td>
+					</tr>
+					<tr>
+						<td class="lbl_block">Parent Hash</td>
+					   	<td class="fld_block" id="block_parent_hash"></td>
+					</tr>
+					<tr>
+						<td class="lbl_block">Sha3uncles</td>
+					   	<td class="fld_block" id="block_sha3uncles"></td>
+					</tr>
+					<tr>
+						<td class="lbl_block">Extra data</td>
+					   	<td class="fld_block" id="block_extra_data"></td>
+					</tr>
+				</table>
+			</div>
+			<div id="block_transactions">
+				<img id="block_transactions_loading_image" src="imgs/loading.gif">
+				<div id="block_transactions_empty">No transactions</div>
+				<table id="block_transaction_table">
+					<thead>
+					<tr class="tx_header">
+						<td class="column_header">#</td>
+						<td class="column_header">From</td>
+						<td class="column_header">To</td>
+						<td class="column_header" colspan=3>Value</td>
+					</tr>
+					</thead>
+					<tbody></tbody>
+				</table>
+			</div>
+			<div id="block_value_transfers">
+				<img id="block_value_transfers_loading_image" src="imgs/loading.gif">
+				<table id="block_value_transfers_table">
+					<thead>
+					<tr class="vt_header">
+						<td class="column_header">Tx</td>
+						<td class="column_header">From</td>
+						<td class="column_header">To</td>
+						<td class="column_header">Kind</td>
+						<td class="column_header" colspan=3>Value</td>
+					</tr>
+					</thead>
+					<tbody></tbody>
+				</table>
+			</div>
+			<div id="block_uncles">
+				<div id="block_uncles_empty">No uncles</div>
+				<div id="uncles_container">
+				<div id="uncle1">
+					<table>
+						<tr>
+							<td class="lbl_block">Number:</td>
+							<td class="fld_block" id="uncle1_block_num"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Parent Number:</td>
+							<td class="fld_block" id="uncle1_parent_num"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Hash:</td>
+							<td class="fld_block" id="uncle1_hash"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Parent Hash</td>
+						   	<td class="fld_block" id="uncle1_parent_hash"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Timestamp</td>
+							<td class="fld_block" id="uncle1_timestamp" class="fld_block"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Datetime</td>
+							<td class="fld_block" id="uncle1_datetime" class="fld_block"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Miner</td>
+							<td class="fld_block" class="fld_block"><a href="" onClick="search_account(this); return false;" id="uncle1_miner"></a></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Difficulty</td>
+							<td class="fld_block" id="uncle1_difficulty" class="fld_block"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Total Difficulty</td>
+						   	<td class="fld_block" id="uncle1_total_difficulty"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Gas Used</td>
+						   	<td class="fld_block" id="uncle1_gas_used"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Gas Limit</td>
+						   	<td class="fld_block" id="uncle1_gas_limit"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Nonce</td>
+						   	<td class="fld_block" id="uncle1_nonce"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Sha3uncles</td>
+						   	<td class="fld_block" id="uncle1_sha3uncles"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Extra data</td>
+						   	<td class="fld_block" id="uncle1_extra_data"></td>
+						</tr>
+					</table>
+				</div> <!-- end of div uncle1 -->
+				<div id="uncle2">
+					<table>
+						<tr>
+							<td class="lbl_block">Number:</td>
+							<td class="fld_block" id="uncle2_block_num"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Parent Number:</td>
+							<td class="fld_block" id="uncle2_parent_num"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Hash:</td>
+							<td class="fld_block" id="uncle2_hash"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Parent Hash</td>
+						   	<td class="fld_block" id="uncle2_parent_hash"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Timestamp</td>
+							<td class="fld_block" id="uncle2_timestamp" class="fld_block"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Datetime</td>
+							<td class="fld_block" id="uncle2_datetime" class="fld_block"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Miner</td>
+							<td class="fld_block" class="fld_block"><a href="" onClick="search_account(this); return false;" id="uncle2_miner"></a></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Difficulty</td>
+							<td class="fld_block" id="uncle2_difficulty" class="fld_block"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Total Difficulty</td>
+						   	<td class="fld_block" id="uncle2_total_difficulty"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Gas Used</td>
+						   	<td class="fld_block" id="uncle2_gas_used"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Gas Limit</td>
+						   	<td class="fld_block" id="uncle2_gas_limit"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Nonce</td>
+						   	<td class="fld_block" id="uncle2_nonce"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Sha3uncles</td>
+						   	<td class="fld_block" id="uncle2_sha3uncles"></td>
+						</tr>
+						<tr>
+							<td class="lbl_block">Extra data</td>
+						   	<td class="fld_block" id="uncle2_extra_data"></td>
+						</tr>
+					</table>
+				</div> <!-- end of div 'uncle 2' -->
+				</div> <!-- uncles_container -->
+			</div><!-- end of div 'uncles' -->
+			</div><!-- block content -->
+		</section>
+		<section id="account_info">
+			<span class="account_hdr">Account Info</span>
+			<div class="account_data_container">
+				<table> 
+					<tr>
+						<td class="account_lbl">Address : </td>
+						<td class="account_fld" id="account_address"></td>
+					</tr>
+					<tr>
+						<td class="account_lbl">Balance : </td>
+						<td class="account_fld" id="account_balance"></td>
+					</td>
+				</table>
+			</div>
+			<span class="account_hdr">Account Statement</span>
+			<div class="tab_line">
+			<a id="tab_account_tx" class="block_tab tab_unselected" href="javascript: account_info_tab_click(1)">
+				<div class="tab_account_tx_label">Transactions</div>
+			</a>
+			<a id="tab_account_vt" class="block_tab tab_unselected" href="javascript: account_info_tab_click(2)">
+				<div class="tab_account_vt_label">Value Transfers</div>
+			</a>
+			</div>
+			<div id="account_transactions">
+				<img id="account_transactions_loading_image" src="imgs/loading.gif">
+				<div id="account_transactions_container">
+					<table id="account_transaction_table">
+						<thead>
+						<tr class="tx_header">
+							<td class="column_header">#</td>
+							<td class="column_header">From</td>
+							<td class="column_header">To</td>
+							<td class="column_header" colspan=3>Value</td>
+						</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+					<div id="acct_transactions_nav" class="browser_buttons"></div>
+				</div>
+			</div>
+			<div id="account_value_transfers">
+				<img id="account_value_transfers_loading_image" src="imgs/loading.gif">
+				<div id="account_value_transfers_container">
+					<table id="account_value_transfers_table">
+						<thead>
+						<tr id="avt_header">
+							<td class="column_header">Block</td>
+							<td class="column_header">From</td>
+							<td class="column_header">To</td>
+							<td class="column_header">Kind</td>
+							<td class="column_header" colspan=3>Value</td>
+							<td class="column_header" colspan=3>Balance</td>
+						</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+					<div id="acct_value_transfers_nav" class="browser_buttons"></div>
+				</div>
+			</div>
+		</section>
+		<section id="single_transaction">
+			<div id="single_transaction_header"> Hash: <span id="transaction_hash"></span></div>
+			<table>
+				<tr>
+					<td class="lbl_block">Block</td>
+					<td class="fld_block" id="transaction_block_num"></td>
+				</tr>
+				<tr>
+					<td class="lbl_block">Confirmations</td>
+					<td class="fld_block" id="transaction_confirmations"></td>
+				</tr>
+				<tr>
+					<td class="lbl_block">From</td>
+					<td class="fld_block" id="transaction_from_addr"></td>
+				</tr>
+				<tr>
+					<td class="lbl_block">To</td>
+					<td class="fld_block" id="transaction_to_addr"></td>
+				</tr>
+				<tr>
+					<td class="lbl_block">Value</td>
+					<td class="fld_block" id="transaction_value"></td>
+				</tr>
+				<tr>
+					<td class="lbl_block">Status</td>
+					<td class="fld_block" id="transaction_status"></td>
+				</tr>
+				<tr>
+					<td class="lbl_block">Gas limit</td>
+					<td class="fld_block" id="transaction_gas_limit"></td>
+				</tr>
+				<tr>
+					<td class="lbl_block">Gas Used</td>
+					<td class="fld_block" id="transaction_gas_used"></td>
+				</tr>
+				<tr>
+					<td class="lbl_block">Gas Price</td>
+					<td class="fld_block" id="transaction_gas_price"></td>
+				</tr>
+				<tr>
+					<td class="lbl_block">Transaction cost</td>
+					<td class="fld_block" id="transaction_cost"></td>
+				</tr>
+				<tr>
+					<td class="lbl_block">V</td>
+					<td class="fld_block" id="transaction_v"></td>
+				</tr>
+				<tr>
+					<td class="lbl_block">R</td>
+					<td class="fld_block" id="transaction_r"></td>
+				</tr>
+				<tr>
+					<td class="lbl_block">S</td>
+					<td class="fld_block" id="transaction_s"></td>
+				</tr>
+				<tr>
+					<td class="lbl_block">Error</td>
+					<td class="fld_block" id="transaction_error"></td>
+				</tr>
+			</table>		
+				<div id="transaction_value_transfers">
+				<div id="transaction_value_transfers_hdr">Value transfers for this transaction:</div>
+				<table id="transaction_value_transfers_table">
+					<thead>
+					<tr id="tvt_header">
+						<td class="column_header">Block</td>
+						<td class="column_header">From</td>
+						<td class="column_header">To</td>
+						<td class="column_header">Kind</td>
+						<td class="column_header" colspan=3>Value</td>
+					</tr>
+					</thead>
+					<tbody></tbody>
+				</table>
+		</section>
+		<section id="help">
+		</section>
+	</div>
+	<div id="footer">
+		<p class="footer_message">
+			Powered by <b>AfterEther</b><br/>
+			<i>Scaling Ethereum to infinity</i><br/>
+			<a href="https://afterether.org">https://afterether.org</a><br/>
+		</p>
+	</div>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<html>
+	<head>
+		<link href="main.css" rel="stylesheet">
+		<link href="chartist.css" rel="stylesheet">
+		<script type="text/javascript" src="ajax.js"></script>
+		<script type="text/javascript" src="stats.js"></script>
+		<script type="text/javascript" src="chartist.js"></script>
+		<script type="text/javascript" src="moment.js"></script>
+		<script type="text/javascript">
+            window.addEventListener('load', stats_load)
+		</script>
+	</head>
+<body class="body">
+	<table id="top">
+		<tr>
+			<td class="upper_left">
+				<a href="https://afterether.org"><img id="logo_img" src="imgs/logo.jpg"></a><br/>
+				<a style="font-weight: bold; font-size: 1em; " class="link" href="https://afterether.org/aex.html">AfterEther Block Explorer</a><br>
+				<span class="logo_message">Support our project, <span class="buy">buy</span> our coins. Contribute and invest at the same time!</span>
+			</td>
+	</table>
+	<div id="content_pane">
+		<section id="stats_difficulty">
+			<h3>Difficulty chart</h3>
+			<div id="difficulty_chart" class="ct-chart ct-perfect-fourth"></div>
+		</section>
+	</div>
+	<div id="footer">
+		<p class="footer_message">
+			Powered by <b>AfterEther</b><br/>
+			<i>Scaling Ethereum to infinity</i><br/>
+			<a href="https://afterether.org">https://afterether.org</a><br/>
+		</p>
+	</div>
+</body>
+</html>

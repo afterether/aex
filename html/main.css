@@ -1,0 +1,468 @@
+.body {
+	font-family:					SANS-SERIF;
+	text-align:						center;
+}
+#last_blocks_container {
+	white-space:					nowrap;
+	font-family:					Inconsolata, monospace;
+	font-weight:					1.2em;
+	overflow:						hidden;
+}
+.block_info {
+	display: 						inline-block;
+	border: 						solid 1px black;
+	text-align:						center;
+	padding:						0.5em;
+	opacity:						0;
+	transition-duration: 			1s;
+	transition-property: 			opacity;
+	transition-timing-function: 	ease-out;
+}
+.block_info_num_block {
+	font-weight: 					bold;
+	font-size:						0.8em;	
+	text-align: 					center;
+}
+.block_info_num_transactions {
+	font-size:						0.6em;
+	text-align:						center;
+}
+#top_stats_container {
+	text-align:						center;
+}
+#top {
+	width:							100%;
+}
+.stats_label {
+	white-space:					nowrap;
+	font-size:						0.8em;
+}
+.stats_value {
+	font-weight:					bold;
+	font-size:						0.8em;
+	white-space:					nowrap;
+}
+#search_text{
+	width:							70%;
+	font-size:						1.2em;
+}
+#content_pane {
+	min-height:						30em;
+	text-align:						center;
+}
+.lbl_block {
+	padding-left:					1.5em;
+	padding-top:					0.4em;
+	padding-right:					1em;
+	padding-bottom:					0.4em;
+	font-weight:					bold;
+	font-size:						0.8em;
+}
+.fld_block {
+	padding:						0.2em;
+	font-size:						0.8em;
+	font-family:					Inconsolata, monospace;
+}
+.tx_td {
+	padding-left:					1em;
+	padding-right:					1em;
+	padding-top:					0.3em;
+	padding-bottom:					0.3em;
+	font-size:						0.8em;
+	font-family:					Inconsolata, monospace;
+	min-width:						2em;
+}
+.tx_td_font {
+	font-size:						0.8em;
+	font-family:					Inconsolata, monospace;
+}
+.value_hi {
+	font-weight:					bold;
+	padding-right:					0;
+	text-align:						right;
+}
+.value_lo {
+	padding-left:					0;
+	text-align:						left;
+}
+.value_dot {
+	padding-right:					0;
+	padding-left:					0;
+}
+.vt_in {
+	color:							green
+}
+.vt_out {
+	color:							red;
+}
+.vt_td {
+	padding-left:					1em;
+	padding-right:					1em;
+	padding-top:					0.3em;
+	padding-bottom:					0.3em;
+	font-size:						0.8em;
+	font-family:					Inconsolata, monospace;
+	min-width:						2em;
+}
+.vt_td_font {
+	font-size:						0.8em;
+	font-family:					Inconsolata, monospace;
+}
+.vt_td_kind {
+	text-align:						center;
+}
+.vt_header {
+	height:							2em;
+}
+#single_transaction {
+	display:						none;
+	max-width:						45em;
+    box-shadow: 					0 -2px 3px -1px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.5);
+}
+#block_info {
+	padding-top:					1em;
+	padding-bottom:					1em;
+	display:						none;
+}
+#block_uncles {
+	display:						none;
+}
+#account_value_transfers {
+	display:						none;
+    background: 					#ffffff;
+    box-shadow: 					0 -2px 3px -1px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.5);
+    border-radius: 					0 3px 3px 3px;
+	width:							100%;
+	position:						relative;
+	z-index:						5;
+}
+#account_transactions {
+	display:						none;
+    background: 					#ffffff;
+    box-shadow: 					0 -2px 3px -1px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.5);
+    border-radius: 					0 3px 3px 3px;
+	width:							100%;
+	position:						relative;
+	z-index:						5;
+}
+#block_children {
+	display:						none;
+	max-width:						45em;
+	position: 						relative;
+	margin-top:						0.6em;
+	margin-bottom:					0.2em;
+	width: 							100%;
+	font-family: 					sans-serif;
+}
+#account_info {
+	display:						none;
+	max-width:						45em;
+	position: 						relative;
+	margin-top:						0.6em;
+	margin-bottom:					0.2em;
+	width: 							100%;
+	font-family: 					sans-serif;
+}
+.block_tab {
+	font-size: 						15px;
+	line-height: 					40px;
+	height: 						40px;
+	position: 						relative;
+	padding: 						0 20px;
+	float: 							left;
+	display:						block;
+	color: 							#000000;
+	letter-spacing: 				1px;
+	text-transform: 				uppercase;
+	font-weight: 					bold;
+	text-align: 					center;
+	text-shadow: 					1px 1px 1px rgba(255,255,255,0.3);
+	border-radius: 					3px 3px 0 0;
+    box-shadow: 					0 -2px 3px -1px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.5);
+	text-decoration: 				none;
+}
+.tab_block_transactions_label {
+    z-index: 						3;
+}
+.tab_block_value_transfers_label {
+    z-index: 						2;
+}
+.tab_block_uncles_label {
+    z-index: 						1;
+}
+.tab_account_tx_label {
+    z-index: 						2;
+}
+.tab_account_vt_label {
+    z-index:						 1;
+}
+.block_content {
+    background: 					#ffffff;
+	position: 						relative;
+    width: 							100%;
+	min-height: 					370px;
+	z-index: 						5;
+    box-shadow: 					0 -2px 3px -1px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.5);
+    border-radius: 					0 3px 3px 3px;
+}
+.tab_line {
+	height: 						40px;
+}
+.tab_selected {
+	background:						#ffffff;
+}
+.tab_unselected {
+	background: 					#d7d7d7;
+	background: 					-moz-linear-gradient(top, #d7d7d7 0%, #6a6a6a 100%);
+	background: 					-webkit-gradient(linear, left top, left bottom, color-stop(0%,#d7d7d7), color-stop(100%,#6a6a6a));
+	background: 					-webkit-linear-gradient(top, #d7d7d7,#6a6a6a 100%);
+	background: 					-o-linear-gradient(top, #d7d7d7 0%,#6a6a6a 100%);
+	background: 					-ms-linear-gradient(top, #d7d7d7 0%,#6a6a6a 100%);
+	background: 					linear-gradient(top, #d7d7d7 0%,#6a6a6a 100%);
+}
+.tab_unselected:hover {
+	background: 					#888888;
+	display:						block;
+	text-decoration: 				none;
+}
+.column_header {
+	text-align:						center;
+	font-size:						1em;
+	font-weight:					bold;
+	border-bottom:					solid #999999 1px;
+}
+#block_transaction_table {
+	display:						none;
+	padding:						1em;
+	border-collapse:				collapse;
+}
+#block_value_transfers {
+	display:						none;
+}
+#block_transactions {
+	display:						none;
+}
+.tx_header {
+	height:							2em;
+}
+#avt_header {
+	height:							2em;
+}
+a.link {
+	padding:						0.2em;
+	color: 							black;
+	text-decoration:				none;
+}
+a.link:hover {
+	background-color: 				#404040;
+	color:							#808080;
+}
+a.link_selected {
+	padding:						0.2em;
+	background-color: 				#404040;
+	color:							#808080;
+	text-decoration:				none;
+}
+#logo_img {
+	width: 							8em;
+}
+.upper_left {
+	text-align:						center;
+	vertical-align:					top;
+}
+.logo_message {
+	font-size:						0.7em;
+}
+.buy {
+	background-color:				yellow;
+	font-weight:					bold;
+
+}
+.network_info {
+    background: 					#ffffff;
+    box-shadow: 					0 -2px 3px -1px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.5);
+    border-radius: 					0 3px 3px 3px;
+	width:							100%;
+	padding: 						0.8em;
+}
+#search_form {
+	padding: 						1em;
+}
+#footer {
+	display:						inline-block;
+    background: 					#ffffff;
+	margin-top:						1em;
+    box-shadow: 					0 -2px 3px -1px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.5);
+    border-radius: 					0 3px 3px 3px;
+	width:							100%;
+	max-width:						45em;
+	text-align:						center;
+}
+.footer_message {
+	padding-top:					1em;
+	padding-bottom:					1em;
+	padding-left:					2em;
+	padding-right:					2em;
+}
+.account_hdr {
+	font-size:						1.2em;
+	font-weight:					bold;
+	font-family:					sans-serif;
+	display:						block;
+	padding-top:					1em;
+	padding-bottom:					1em;
+	text-align:						left;
+}
+.account_lbl {
+	font-size:						1em;
+	font-weight:					bold;
+	font-family:					sans-serif;
+	padding-left:					1.5em;
+	padding-right:					1em;
+	padding-top:					0.2em;
+	padding-bottom:					0.2em;
+}
+.account_fld {
+	padding-left:					1em;
+	padding-right:					1em;
+	padding-top:					0.2em;
+	padding-bottom:					0.2em;
+	font-family:					Inconsolata, monospace;
+	font-size:						1.1em;
+}
+.account_data_container {
+	margin:							1em;
+}
+.browser_buttons {
+	height:							6em;
+}
+.browser_nav_btns {
+	height:							48px;
+	margin-top:						15px;
+	margin-bottom:					15px;
+}
+.prev_btn {
+	float:							left;
+}
+.next_btn {
+	float:							right;
+}
+#block_header {
+	padding-bottom:					1em;
+	padding-top:					0.6em;
+	height:							2em;
+	text-align:						left;
+}
+#block_header_block_num {
+	font-size:						1.2em;
+	font-weight:					bold;
+	padding:						0.5em;
+	position:						relative;
+}
+#single_transaction_header {
+	padding:						1em;
+	font-size:						1.1em;
+	font-weight:					bold;
+	font-family:					sans-serif;
+	text-align:						left;
+}
+#block_value_transfers_table {
+	border-collapse:				collapse;
+}
+#block_transactions_empty {
+	display:						none;
+	padding:						2em;
+	font-size:						1em;
+	font-weight:					bold;
+	text-align:						left;
+}
+#block_uncles_empty {
+	display:						none;
+	padding:						2em;
+	font-size:						1em;
+	font-weight:					bold;
+	text-align:						left;
+}
+div.block_line_buttons {
+	color:							#555555;
+	font-size:						3em;
+	font-weight:					bold;
+	font-stretch:					ultra-condensed;
+	-webkit-transform:				scale(0.5, 1.0);
+	-moz-transform:					scale(0.5, 1.0);
+	-ms-transform:					scale(0.5, 1.0);
+	-o-transform:					scale(0.5, 1.0);
+	transform:						scale(0.5,1.0);
+}
+div.block_line_buttons:hover {
+	color: 							black;
+}
+#transaction_value_transfers_hdr {
+	padding:						0.5em;
+	font-weight:					bold;
+	font-size:						1.1em;
+	font-family:					sans-serif;
+	text-align:						left;
+}
+table.block_line {
+	display: 						flex;
+	flex-direction:					column;
+	align-items:					center;
+	width:							100%;
+}
+#help {
+	display:						none;
+}
+#block_value_transfers_loading_image {
+	display: 						none;
+}
+#block_transactions_loading_image {
+	display:						none;
+}
+#account_value_transfers_loading_image {
+	display:						none;
+}
+#account_transactions_loading_image {
+	display:						none;
+}
+.td_tx_index {
+	text-align:						center;
+}
+#uncles_container {
+	display:						none;
+}
+.net_stats_link {
+	display:						inline-block;
+	border:							solid #cdcdcd 1px;
+	width:							100%;
+	text-align:						center;
+	text-decoration:				none;
+	color:							black;
+	height:							1.2em;
+	padding-top:					0.3em;
+	padding-bottom:					0.3em;
+}
+.net_stats_link:hover {
+	background-color: 				#404040;
+	color:							#808080;
+}
+#stats_difficulty {
+	display:						inline-block;
+	max-width:						45em;
+	position: 						relative;
+	margin-top:						0.6em;
+	margin-bottom:					0.2em;
+	width: 							100%;
+	font-family: 					sans-serif;
+    box-shadow: 					0 -2px 3px -1px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.5);
+    border-radius: 					0 3px 3px 3px;
+}
+#object_not_found {
+	display:						none;
+	margin-top:						2em;
+	margin-bottom:					2em;
+	padding:						1em;
+	font-size: 						1.3em;
+	font-weight:					bold;
+	color:							red;
+}
