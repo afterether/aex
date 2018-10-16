@@ -1,3 +1,20 @@
+/*
+	Copyright 2018 The AfterEther Team
+	This file is part of AEX, Ethereum Blockchain Explorer.
+		
+	AEX is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Lesser General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	AEX is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU Lesser General Public License for more details.
+	
+	You should have received a copy of the GNU Lesser General Public License
+	along with AEX. If not, see <http://www.gnu.org/licenses/>.
+*/
 /// "CONSTANTS"
 var ticker_symbol='ETH'
 var currency_name='Ethereum'
@@ -31,6 +48,19 @@ function init() {
 	elt=document.getElementById('prev_block_line')
 	elt.addEventListener("click",prev_block_line)
 	setTimeout(check_for_new_blocks,check_new_blocks_interval*1000)
+	var path_array = window.location.href.split( '?' );
+	if (path_array.length==2) {
+		var search_term=path_array[1]
+		if (search_term.length>0) {
+			console.log("search term = "+search_term)
+			search(search_term)
+		}
+	}
+}
+function short_search(e) {
+	e.preventDefault()
+	let clicked_object = e.target;
+	search(clicked_object.dataset.search_term)
 }
 function get_last_blocks(last_block_num) {
 	
@@ -80,12 +110,19 @@ function get_block_transactions(block_number) {
 	elt.style.display="none";
 	Ajax_GET('/btx/'+block_number,function(data) {
 		response=JSON.parse(data)
-		load_transactions(response.result)
+		load_block_transactions(response.result)
 		elt=document.getElementById("block_transactions_loading_image")
 		elt.style.display="none";
 	});
 }
 function get_block_value_transfers(block_num) {
+	var elt
+	var table_element=document.getElementById('block_value_transfers_table')
+	var elts=table_element.getElementsByTagName("TBODY")
+	var tbody=elts[0]
+	while (tbody.lastElementChild) {
+		tbody.removeChild(tbody.lastElementChild)
+	}
 	elt=document.getElementById("block_value_transfers_loading_image")
 	elt.style.display="inline-block";
 	elt=document.getElementById("block_value_transfers_table")
@@ -104,6 +141,14 @@ function get_block_value_transfers(block_num) {
 	});
 }
 function get_account_value_transfers(account_address,offset,limit) {
+
+	var table_element=document.getElementById("account_value_transfers_table")
+	var elts=table_element.getElementsByTagName("TBODY")
+	var tbody=elts[0]
+	while (tbody.lastElementChild) {
+		tbody.removeChild(tbody.lastElementChild)
+	}
+
 	var elt
 	elt=document.getElementById("account_value_transfers_loading_image")
 	elt.style.display="inline-block";
@@ -122,6 +167,12 @@ function get_account_value_transfers(account_address,offset,limit) {
 	});
 }
 function get_transaction_value_transfers(tx_hash) {
+	var table_element=document.getElementById('transaction_value_transfers_table')
+	var elts=table_element.getElementsByTagName("TBODY")
+	var tbody=elts[0]
+	while (tbody.lastElementChild) {
+		tbody.removeChild(tbody.lastElementChild)
+	}
 	Ajax_GET('/tvt/'+tx_hash,function(data) {
 		var result,response;
 		response=JSON.parse(data)
@@ -209,7 +260,20 @@ function load_block(block) {
 				}
 			}
 			elt=document.getElementById("block_miner")
-			elt.innerHTML=block.Miner
+			while (elt.lastElementChild) {
+				elt.removeChild(elt.lastElementChild)
+			}
+			var a=document.createElement('A')
+			var link_text = document.createTextNode(block.Miner);
+			a.appendChild(link_text);
+			a.title = format_address4link(block.Miner)
+			a.className="link"
+			a.href = '/index.html?'+format_address4link(block.Miner)
+			a.dataset.search_term=format_address4link(block.Miner)
+			a.addEventListener("click",short_search)
+			elt.appendChild(a)
+		//	elt.innerHTML=block.Miner
+		//
 			elt=document.getElementById("block_num_transactions")
 			elt.innerHTML=block.Num_transactions
 			elt=document.getElementById("block_difficulty")
@@ -286,7 +350,7 @@ function load_uncles(udata) {
 	elt=document.getElementById("uncle2_extra_data");			elt.innerHTML=udata.Uncle2.Extra_data
 	elt=document.getElementById("uncle2");						elt.style.display="block"
 }
-function load_transactions(transactions) {
+function load_block_transactions(transactions) {
 	var table=document.getElementById("block_transaction_table")
 	if (!table) {
 		console.log("missing element `transaction_table`")
@@ -307,14 +371,26 @@ function load_transactions(transactions) {
 		tbody.removeChild(tbody.lastElementChild)
 	}
 	for (i in transactions) {
+		var a,link_text
 		tx=transactions[i]
 		tr=document.createElement('TR')
 		if ((i%2)==1) {
 			tr.style.backgroundColor="#eeeeee"
 		}
+		if (tx.Vm_error.length>0) {
+			tr.style.backgroundColor="#de5d5d"
+		}
 		// TX Number
 		td=document.createElement('TD')
-		td.innerHTML='<a class="link" href="javascript: search(\''+tx.Tx_hash+'\')">'+(tx.Tx_index+1)+'</a';
+		a=document.createElement('A')
+		link_text = document.createTextNode(tx.Tx_index+1);
+		a.appendChild(link_text);
+		a.title = tx.Tx_hash
+		a.className="link"
+		a.href = '/index.html?'+tx.Tx_hash
+		a.dataset.search_term=tx.Tx_hash
+		a.addEventListener("click",short_search)
+		td.appendChild(a)
 		td.className="tx_td"
 		tr.appendChild(td)
 		// From addr
@@ -344,12 +420,6 @@ function load_transactions(transactions) {
 		td.className="tx_td_font value_lo"
 		td.innerHTML=val.lo
 		tr.appendChild(td)
-
-		td=document.createElement('TD')
-		td.className="tx_td"
-		td.innerHTML='<a href="javascript: search(\''+tx.Tx_hash+'\')"><img src="imgs/tx_details.png"></a>'
-		tr.appendChild(td)
-
 		tbody.appendChild(tr)
 	}
 }
@@ -417,13 +487,32 @@ function load_account_transactions(table,tx_set) {
 		add_page_navigation_elts(elt,tx_set,transactions.length)
 	}
 }
-function load_account(account_id,account_address,account_balance) {
-	var elt=document.getElementById("account_address")
-	elt.innerHTML=account_address
+function load_account(account) {
+	var elt=document.getElementById("account_info_account_address")
+	elt.innerHTML=account.Address
 	elt=document.getElementById("account_balance")
-	var val_obj=format_value(account_balance)
+	var val_obj=format_value(account.Balance)
 	elt.innerHTML='<span class="value_hi">'+val_obj.hi+'</span><span class="value_dot">.</span><span class="value_lo">'+val_obj.lo+ticker_symbol+'</span>'
-	elt=document.getElementById("account_tab") 
+	elt=document.getElementById("account_type") 
+	if (account.Owner_id==0) {
+		elt.innerHTML="Externally Owned Account (EOA)"
+	} else {
+		elt.innerHTML="Contract.<br/>Owner: "+'<a class="link" href="javascript: search(\''+account.Owner_address+'\')">'+account.Owner_address+'</a>';
+	}
+	elt=document.getElementById("account_num_tx")
+	elt.innerHTML=account.Num_transactions
+
+	var date = new Date(account.Ts_created*1000);
+    var date_str=('0' + date.getDate()).slice(-2) + '/' + ('0' + (date.getMonth() + 1)).slice(-2) + '/' + date.getFullYear() + ' ' + ('0' + date.getHours()).slice(-2) + ':' + ('0' + date.getMinutes()).slice(-2) + ':' +('0' + date.getSeconds()).slice(-2);
+	elt=document.getElementById("account_created")
+	elt.innerHTML=date_str+', Block: '+account.Block_created
+
+	elt=document.getElementById("account_deleted")
+	if (account.Deleted==1) {
+		elt.innerHTML='Yes'
+	} else {
+		elt.innerHTML='No'
+	}
 }
 function load_account_value_transfers(table_element,vt_set) {
 
@@ -450,6 +539,9 @@ function load_account_value_transfers(table_element,vt_set) {
 		if ((i%2)==1) {
 			tr.style.backgroundColor="#eeeeee"
 		}
+		if (vt.Error.length>0) {
+			tr.style.backgroundColor="#de5d5d"
+		}
 		var balance
 		var value_color
 		var val_elt
@@ -467,17 +559,43 @@ function load_account_value_transfers(table_element,vt_set) {
 		}
 		// Block
 		td=document.createElement('TD')
-		td.innerHTML='<a class="link" href="javascript: search(\''+vt.Block_num+'\')">'+vt.Block_num+'</a';
+		a=document.createElement('A')
+		link_text = document.createTextNode(vt.Block_num);
+		a.appendChild(link_text);
+		a.title = format_address4link(vt.Block_num)
+		a.className="link"
+		a.href = '/index.html?'+vt.Block_num
+		a.dataset.search_term=vt.Block_num
+		a.addEventListener("click",short_search)
+		td.appendChild(a)
 		td.className="vt_td"
 		tr.appendChild(td)
+
 		// From addr
 		td=document.createElement('TD')
-		td.innerHTML='<a class="link" title="'+vt.From_addr+'" href="javascript: search(\''+format_address4link(vt.From_addr)+'\')">'+format_address(vt.From_addr)+'</a';
+		a=document.createElement('A')
+		link_text = document.createTextNode(format_address(vt.From_addr));
+		a.appendChild(link_text);
+		a.title = format_address4link(vt.From_addr)
+		a.className="link"
+		a.href = '/index.html?'+format_address4link(vt.From_addr)
+		a.dataset.search_term=format_address4link(vt.From_addr)
+		a.addEventListener("click",short_search)
+		td.appendChild(a)
 		td.className="vt_td"
 		tr.appendChild(td)
+
 		// To addr
 		td=document.createElement('TD')
-		td.innerHTML='<a class="link" title="'+vt.To_addr+'" href="javascript: search(\''+vt.To_addr+'\')">'+format_address(vt.To_addr)+'</a';
+		a=document.createElement('A')
+		link_text = document.createTextNode(format_address(vt.To_addr));
+		a.appendChild(link_text);
+		a.title = format_address4link(vt.To_addr)
+		a.className="link"
+		a.href = '/index.html?'+format_address4link(vt.To_addr)
+		a.dataset.search_term=vt.To_addr
+		a.addEventListener("click",short_search)
+		td.appendChild(a)
 		td.className="vt_td"
 		tr.appendChild(td)
 
@@ -554,24 +672,53 @@ function load_transaction_value_transfers(table_element,vt_set) {
 			tr.style.backgroundColor="#eeeeee"
 		}
 		if (vt.Error.length>0) {
-			tr.style.backgroundColor="red"
+			tr.style.backgroundColor="#de5d5d"
 		}
 		var balance
 		var value_color=''
 		var val_elt
+		var a,link_text
 		// Block
 		td=document.createElement('TD')
-		td.innerHTML='<a class="link" href="javascript: search(\''+vt.Block_num+'\')">'+vt.Block_num+'</a';
+
+		a=document.createElement('A')
+		link_text = document.createTextNode(vt.Block_num);
+		a.appendChild(link_text);
+		a.title = 'Block '+vt.Block_num
+		a.className="link"
+		a.href = '/index.html?'+vt.Block_num
+		a.dataset.search_term=vt.Block_num
+		a.addEventListener("click",short_search)
+		td.appendChild(a)
 		td.className="vt_td"
 		tr.appendChild(td)
 		// From addr
 		td=document.createElement('TD')
-		td.innerHTML='<a class="link" title="'+vt.From_addr+'" href="javascript: search(\''+vt.From_addr+'\')">'+format_address(vt.From_addr)+'</a';
+
+		a=document.createElement('A')
+		link_text = document.createTextNode(format_address(vt.From_addr));
+		a.appendChild(link_text);
+		a.title = vt.From_addr 
+		a.className="link"
+		a.href = '/index.html?'+format_address4link(vt.From_addr)
+		a.dataset.search_term=format_address4link(vt.From_addr)
+		a.addEventListener("click",short_search)
+		td.appendChild(a)
 		td.className="vt_td"
 		tr.appendChild(td)
 		// To addr
 		td=document.createElement('TD')
-		td.innerHTML='<a class="link" title="'+vt.To_addr+'" href="javascript: search(\''+vt.To_addr+'\')">'+format_address(vt.To_addr)+'</a';
+
+		a=document.createElement('A')
+		link_text = document.createTextNode(format_address(vt.To_addr));
+		a.appendChild(link_text);
+		a.title = vt.To_addr 
+		a.className="link"
+		a.href = '/index.html?'+format_address4link(vt.To_addr)
+		a.dataset.search_term=format_address4link(vt.To_addr)
+		a.addEventListener("click",short_search)
+		td.appendChild(a)
+
 		td.className="vt_td"
 		tr.appendChild(td)
 
@@ -597,11 +744,11 @@ function add_page_navigation_elts(elt,data_set,num_items) {
 		if (new_offset<0) {
 			new_offset=0
 		}
-		prev_btn='<a class="navigator_btn prev_btn" href="javascript: '+data_set.method_name+'(\''+data_set.Account_address+'\','+new_offset+','+default_limit+')"><img class="browser_nav_btns" src="imgs/previous.png"></a>';
+		prev_btn='<a class="navigator_btn prev_btn" href="javascript: '+data_set.method_name+'(\''+data_set.Account.Address+'\','+new_offset+','+default_limit+')"><img class="browser_nav_btns" src="imgs/previous.png"></a>';
 	}
 	var next_btn='';
 	if (num_items==default_limit) {	
-		next_btn='<a class="navigator_btn next_btn" href="javascript: '+data_set.method_name+'(\''+data_set.Account_address+'\','+(data_set.Offset+default_limit)+','+default_limit+')"><img class="browser_nav_btns" src="imgs/next.png"></a>'
+		next_btn='<a class="navigator_btn next_btn" href="javascript: '+data_set.method_name+'(\''+data_set.Account.Address+'\','+(data_set.Offset+default_limit)+','+default_limit+')"><img class="browser_nav_btns" src="imgs/next.png"></a>'
 	}
 	elt.innerHTML=prev_btn+next_btn
 }
@@ -620,11 +767,33 @@ function load_single_transaction(account_address,transaction) {
 	}
 	elt=document.getElementById("transaction_from_addr")
 	if (elt) {
-		elt.innerHTML=transaction.From_addr
+		while (elt.lastElementChild) {
+			elt.removeChild(elt.lastElementChild)
+		}
+		var a=document.createElement('A')
+		var link_text = document.createTextNode(format_address4link(transaction.From_addr));
+		a.appendChild(link_text);
+		a.title = format_address4link(transaction.From_addr)
+		a.className="link"
+		a.href = '/index.html?'+format_address4link(transaction.From_addr)
+		a.dataset.search_term=format_address4link(transaction.From_addr)
+		a.addEventListener("click",short_search)
+		elt.appendChild(a)
 	}
 	elt=document.getElementById("transaction_to_addr")
 	if (elt) {
-		elt.innerHTML=transaction.To_addr
+		while (elt.lastElementChild) {
+			elt.removeChild(elt.lastElementChild)
+		}
+		var a=document.createElement('A')
+		var link_text = document.createTextNode(format_address4link(transaction.To_addr));
+		a.appendChild(link_text);
+		a.title = format_address4link(transaction.To_addr)
+		a.className="link"
+		a.href = '/index.html?'+format_address4link(transaction.To_addr)
+		a.dataset.search_term=format_address4link(transaction.To_addr)
+		a.addEventListener("click",short_search)
+		elt.appendChild(a)
 	}
 	elt=document.getElementById("transaction_value")
 	if (elt) {
@@ -649,7 +818,8 @@ function load_single_transaction(account_address,transaction) {
 	}
 	elt=document.getElementById("transaction_gas_price")
 	if (elt) {
-		elt.innerHTML=transaction.Gas_price
+		var val=format_value(transaction.Gas_price)
+		elt.innerHTML='<span class="value_hi">'+val.hi+'</span>'+'<span class="value_dot">.</span>'+'<span class="value_lo">'+val.lo+ticker_symbol+'</span>';
 	}
 	elt=document.getElementById("transaction_cost")
 	if (elt) {
@@ -670,7 +840,7 @@ function load_single_transaction(account_address,transaction) {
 	}
 	elt=document.getElementById("transaction_error")
 	if (elt) {
-		elt.innerHTML=transaction.Tx_error
+		elt.innerHTML=transaction.Vm_error
 	}
 }
 function load_block_value_transfers(table_element,value_transfers) {
@@ -682,28 +852,52 @@ function load_block_value_transfers(table_element,value_transfers) {
 	}
 	var i=0
 	for (i in value_transfers) {
+		var a,link_text
 		vt=value_transfers[i]
 		tr=document.createElement('TR')
 		if ((i%2)==1) {
 			tr.style.backgroundColor="#eeeeee"
 		}
 		if (vt.Error.length>0) {
-			tr.style.backgroundColor="red"
+			tr.style.backgroundColor="#de5d5d"
 		}
 		// Tx number
 		td=document.createElement('TD')
-		td.innerHTML='<a class="link" href="javascript: search(\''+vt.Tx_hash+'\')">'+vt.Tx_index+'</a>';
+		a=document.createElement('A')
+		link_text = document.createTextNode(vt.Tx_index);
+		a.appendChild(link_text);
+		a.title = vt.Tx_hash
+		a.className="link"
+		a.href = '/index.html?'+vt.Tx_hash
+		a.dataset.search_term=vt.Tx_hash
+		a.addEventListener("click",short_search)
+		td.appendChild(a)
 		td.className="vt_td td_tx_index"
 		tr.appendChild(td)
-		// From addr
+
 		td=document.createElement('TD')
-		td.innerHTML='<a class="link" href="javascript: search(\''+format_address4link(vt.From_addr)+'\')">'+format_address(vt.From_addr)+'</a';
+		a=document.createElement('A')
+		link_text = document.createTextNode(format_address(vt.From_addr));
+		a.appendChild(link_text);
+		a.title = vt.From_addr 
+		a.className="link"
+		a.href = '/index.html?'+format_address4link(vt.From_addr)
+		a.dataset.search_term=format_address4link(vt.From_addr)
+		a.addEventListener("click",short_search)
+		td.appendChild(a)
 		td.className="vt_td"
 		tr.appendChild(td)
 		// To addr
 		td=document.createElement('TD')
-		td.innerHTML=vt.To_addr.substr(1,6)+'...'+vt.To_addr.substr(-6,6)
-		td.innerHTML='<a class="link" href="javascript: search(\''+vt.To_addr+'\')">'+format_address(vt.To_addr)+'</a';
+		a=document.createElement('A')
+		link_text = document.createTextNode(format_address(vt.To_addr));
+		a.appendChild(link_text);
+		a.title = vt.To_addr 
+		a.className="link"
+		a.href = '/index.html?'+format_address4link(vt.To_addr)
+		a.dataset.search_term=format_address4link(vt.To_addr)
+		a.addEventListener("click",short_search)
+		td.appendChild(a)
 		td.className="vt_td"
 		tr.appendChild(td)
 		// Kind
@@ -716,7 +910,6 @@ function load_block_value_transfers(table_element,value_transfers) {
 
 		add_value_to_table(tr,vt)
 
-		//table.appendChild(tr)
 		tbody.appendChild(tr)
 	}
 }
@@ -814,7 +1007,7 @@ function search_callback(result) {
 			select_current_account_tab(2)
 			select_and_show_account_pane(2)
 			get_account_value_transfers(result.Search_text,0,default_limit)
-			load_account(result.Account_id,result.Search_text,result.Account_balance)
+			load_account(result.Account)
 
 		break;
 		case 3: // transaction by hash
@@ -998,6 +1191,10 @@ function lookup_kind(kind_code) {
 		case 7:
 			kind.code='KIL'
 			kind.description='Contract destruction'
+		break;
+		case 8:
+			kind.code='FRK'
+			kind.description='Transfer caused by a hard fork'
 		break;
 		default:
 			kind.code='???'

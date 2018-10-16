@@ -159,7 +159,7 @@
 					</tr>
 					<tr>
 						<td class="lbl_block">Miner</td>
-						<td class="fld_block" class="fld_block"><a href="" onClick="search_account(this); return false;" id="block_miner"></a></td>
+						<td class="fld_block" class="fld_block" id="block_miner"></td>
 					</tr>
 					<tr>
 						<td class="lbl_block">Transactions</td>
@@ -366,12 +366,35 @@
 				<table> 
 					<tr>
 						<td class="account_lbl">Address : </td>
-						<td class="account_fld" id="account_address"></td>
+						<td class="account_fld" id="account_info_account_address"></td>
 					</tr>
 					<tr>
 						<td class="account_lbl">Balance : </td>
 						<td class="account_fld" id="account_balance"></td>
 					</td>
+					<tr>
+						<td class="account_lbl"></td>
+						<td>
+							<table>
+								<tr>
+									<td class="account_lbl2">Type : </td>
+									<td class="account_fld2" id="account_type"></td>
+								</tr>
+								<tr>
+									<td class="account_lbl2">Transactions : </td>
+									<td class="account_fld2" id="account_num_tx"></td>
+								</tr>
+								<tr>
+									<td class="account_lbl2">Created : </td>
+									<td class="account_fld2" id="account_created"></td>
+								</tr>
+								<tr>
+									<td class="account_lbl2">Deleted : </td>
+									<td class="account_fld2" id="account_deleted"></td>
+								</tr>
+							</table>
+						</td>
+					</tr>
 				</table>
 			</div>
 			<span class="account_hdr">Account Statement</span>
@@ -477,7 +500,7 @@
 				</tr>
 				<tr>
 					<td class="lbl_block">Error</td>
-					<td class="fld_block" id="transaction_error"></td>
+					<td class="fld_block erroneous" id="transaction_error"></td>
 				</tr>
 			</table>		
 				<div id="transaction_value_transfers">

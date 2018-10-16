@@ -80,6 +80,7 @@
 	font-weight:					bold;
 	padding-right:					0;
 	text-align:						right;
+	color:							#3333FF;
 }
 .value_lo {
 	padding-left:					0;
@@ -321,6 +322,8 @@ a.link_selected {
 	padding-right:					1em;
 	padding-top:					0.2em;
 	padding-bottom:					0.2em;
+	text-align:						right;
+	white-space:					nowrap;
 }
 .account_fld {
 	padding-left:					1em;
@@ -329,6 +332,24 @@ a.link_selected {
 	padding-bottom:					0.2em;
 	font-family:					Inconsolata, monospace;
 	font-size:						1.1em;
+}
+.account_lbl2 {
+	font-size:						0.7em;
+	font-weight:					bold;
+	font-family:					sans-serif;
+	padding-left:					1.5em;
+	padding-right:					1em;
+	padding-top:					0.2em;
+	padding-bottom:					0.2em;
+	white-space:						nowrap;
+}
+.account_fld2 {
+	padding-left:					1em;
+	padding-right:					1em;
+	padding-top:					0.2em;
+	padding-bottom:					0.2em;
+	font-family:					Inconsolata, monospace;
+	font-size:						0.8em;
 }
 .account_data_container {
 	margin:							1em;
@@ -465,4 +486,8 @@ table.block_line {
 	font-size: 						1.3em;
 	font-weight:					bold;
 	color:							red;
+}
+.erroneous {
+	color:							red;
+	font-weight:					bold;
 }

@@ -1,3 +1,20 @@
+/*
+	Copyright 2018 The AfterEther Team
+	This file is part of AEX, Ethereum Blockchain Explorer.
+		
+	AEX is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Lesser General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	AEX is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU Lesser General Public License for more details.
+	
+	You should have received a copy of the GNU Lesser General Public License
+	along with AEX. If not, see <http://www.gnu.org/licenses/>.
+*/
 package main
 import (
 	"fmt"
@@ -13,7 +30,6 @@ import (
 )
 var default_limit int=20
 var db *sql.DB
-
 func init_postgres() {
 	var err error
 	Info.Println(fmt.Sprintf("Connecting to PostgreSQL database: %v@%v/%v",os.Getenv("ETHBOT_USERNAME"),os.Getenv("ETHBOT_HOST"),os.Getenv("ETHBOT_DATABASE")))
@@ -46,6 +62,114 @@ func init_postgres() {
 		Info.Println(fmt.Sprintf("Last block is: %v",block_num))
 	}
 }
+func Get_balances(address_list string) ([]Json_balance_t,error) {
+	var output_array []Json_balance_t
+	var query string
+	query=`SELECT address,last_balance FROM account WHERE address IN(`+address_list+`)`
+
+	rows,err:=db.Query(query);
+	if (err!=nil) {
+		Error.Println(fmt.Sprintf("failed to execute query: %v, address list: %v, error=%v",query,address_list,err))
+		return output_array,errors.New("Bad query for getting balances:"+err.Error())
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var b Json_balance_t
+		err:=rows.Scan(&b.Address,&b.Balance)
+		if (err!=nil) {
+			if err==sql.ErrNoRows {
+				return output_array,ErrNoRows;
+			} else {
+				Error.Println(fmt.Sprintf("Scan failed at Get_balances(): %v",err))
+				os.Exit(2)
+			}
+		}
+		output_array=append(output_array,b)
+	}
+	return output_array,nil
+}
+func Get_balances_sum(address_list string) string {
+	var sum string
+	var query string
+	query=`SELECT sum(last_balance) as sum FROM account WHERE address IN(`+address_list+`)`
+
+	row:=db.QueryRow(query);
+	var aux_sum_str sql.NullString
+	err:=row.Scan(&aux_sum_str)
+	if (err!=nil) {
+		Error.Println(fmt.Sprintf("failed to execute query: %v, address list: %v, error=%v",query,address_list,err))
+		os.Exit(2)
+	}
+	if aux_sum_str.Valid {
+		sum=aux_sum_str.String
+	}
+	return sum
+}
+func Get_block(block_num int,hash string) (Json_block_t,bool,error) {
+	var output Json_block_t
+	var query string
+
+	var where_condition string = "block_num=$1"
+	query=`
+		SELECT 
+			b.block_num,
+			b.block_hash,
+			b.block_ts,
+			m.address,
+			b.num_tx,
+			b.num_vt,
+			b.num_uncles,
+			b.difficulty,
+			b.total_dif,
+			b.gas_used,
+			b.gas_limit,
+			b.size,
+			b.nonce,
+			b.parent_id,
+			b.uncle_hash,
+			b.extra,
+			b.val_transferred,
+			b.miner_reward
+		FROM block AS b
+		LEFT JOIN account AS m ON b.miner_id=m.account_id
+		WHERE `
+	var row *sql.Row
+	if (block_num==-1) {
+		where_condition="block_hash=$1"
+		row=db.QueryRow(query+where_condition,hash);
+	} else {
+		where_condition="block_num=$1"
+		row=db.QueryRow(query+where_condition,block_num);
+	}
+	var parent_id int64
+	err:=row.Scan(&output.Number,&output.Hash,&output.Timestamp,&output.Miner,&output.Num_transactions,&output.Num_value_transfers,&output.Num_uncles,&output.Difficulty,&output.Total_difficulty,&output.Gas_used,&output.Gas_limit,&output.Size,&output.Nonce,&parent_id,&output.Sha3uncles,&output.Extra_data,&output.Val_transferred,&output.Miner_reward)
+	if (err!=nil) {
+		if (err==sql.ErrNoRows) {
+			return output,false,errors.New(fmt.Sprintf("Block number %v not found",block_num))
+		} else {
+			return output,false,errors.New(fmt.Sprintf("SQL error: %v",err))
+		}
+	}
+	last_block_num:=get_last_block()
+	if (last_block_num<0) {
+		return output,true,errors.New(fmt.Sprintf("Probably the database is empty, last block number is < 0"))
+	}
+	output.Confirmations=last_block_num-int(output.Number)
+	if output.Number>0 {
+		parent_num:=output.Number-1
+		query="SELECT block_num,block_hash FROM block WHERE block_num=$1"
+		row=db.QueryRow(query,parent_num)
+		if (err==sql.ErrNoRows) {
+			return output,true,errors.New(fmt.Sprintf("Parent block (id=%v) not found",parent_num))
+		} else {
+			err:=row.Scan(&output.Parent_num,&output.Parent_hash)
+			if err!=nil {
+				Error.Println(fmt.Sprintf("Failed getting parent block data for block_num=%v: %v",parent_num,err))
+			}
+		}
+	}
+	return output,true,nil
+}
 func Get_block_transactions(block_num int) ([]Json_transaction_t,error) {
 	var output_array []Json_transaction_t
 
@@ -63,14 +187,14 @@ func Get_block_transactions(block_num int) ([]Json_transaction_t,error) {
 			tx.gas_used,
 			tx.gas_price,
 			tx.nonce::text,
-			tx.block_id,
 			tx.block_num,
 			tx.tx_index,
 			tx.tx_status,
 			tx.v,
 			tx.r,
 			tx.s,
-			tx.tx_error
+			tx.tx_error,
+			tx.vm_error
 		FROM transaction AS tx
 		LEFT JOIN account as src ON tx.from_id=src.account_id
 		LEFT JOIN account as dst ON tx.to_id=dst.account_id
@@ -85,7 +209,7 @@ func Get_block_transactions(block_num int) ([]Json_transaction_t,error) {
 	defer rows.Close()
 	for rows.Next() {
 		var tx Json_transaction_t
-		err:=rows.Scan(&tx.Tx_id,&tx.From_id,&tx.To_id,&tx.From_addr,&tx.To_addr,&tx.Value,&tx.Tx_hash,&tx.Gas_limit,&tx.Gas_used,&tx.Gas_price,&tx.Nonce,&tx.Block_id,&tx.Block_num,&tx.Tx_index,&tx.Tx_status,&tx.V,&tx.R,&tx.S,&tx.Tx_error)
+		err:=rows.Scan(&tx.Tx_id,&tx.From_id,&tx.To_id,&tx.From_addr,&tx.To_addr,&tx.Value,&tx.Tx_hash,&tx.Gas_limit,&tx.Gas_used,&tx.Gas_price,&tx.Nonce,&tx.Block_num,&tx.Tx_index,&tx.Tx_status,&tx.V,&tx.R,&tx.S,&tx.Tx_error,&tx.Vm_error)
 		if (err!=nil) {
 			if err==sql.ErrNoRows {
 				return output_array,ErrNoRows;
@@ -107,7 +231,6 @@ func Get_block_value_transfers(block_num int) ([]Json_value_transfer_t,error) {
 			v.tx_id,
 			t.tx_hash::text,
 			t.tx_index,
-			v.block_id,
 			v.block_num,
 			v.from_id,
 			v.to_id,
@@ -123,7 +246,7 @@ func Get_block_value_transfers(block_num int) ([]Json_value_transfer_t,error) {
 		LEFT JOIN account as dst ON v.to_id=dst.account_id
 		LEFT JOIN transaction as t ON v.tx_id=t.tx_id
 		WHERE v.block_num=$1 
-		ORDER BY v.block_num,v.valtr_id
+		ORDER BY bnumvt
 		`
 	rows,err:=db.Query(query,block_num);
 	if (err!=nil) {
@@ -136,7 +259,7 @@ func Get_block_value_transfers(block_num int) ([]Json_value_transfer_t,error) {
 		var tx_id sql.NullInt64
 		var tx_hash sql.NullString
 		var tx_index sql.NullInt64
-		err:=rows.Scan(&vt.Valtr_id,&tx_id,&tx_hash,&tx_index,&vt.Block_id,&vt.Block_num,&vt.To_addr,&vt.To_id,&vt.From_addr,&vt.To_addr,&vt.Value,&vt.From_balance,&vt.To_balance,&vt.Kind,&vt.Error)
+		err:=rows.Scan(&vt.Valtr_id,&tx_id,&tx_hash,&tx_index,&vt.Block_num,&vt.To_addr,&vt.To_id,&vt.From_addr,&vt.To_addr,&vt.Value,&vt.From_balance,&vt.To_balance,&vt.Kind,&vt.Error)
 		if (err!=nil) {
 			if err==sql.ErrNoRows {
 				return output_array,nil;
@@ -162,14 +285,274 @@ func Get_block_value_transfers(block_num int) ([]Json_value_transfer_t,error) {
 	}
 	return output_array,nil
 }
-func Get_account_transactions(acct_addr string,offset int,limit int) (Json_tx_set_t,error) {
-	var output Json_tx_set_t
+func Get_block_token_operations() {
 
-	if limit==0 {
+
+}
+func Get_account_fungible_tokens(address_list string,offset int,limit int) (Tok_acct_fungible_holdings_t,error) {
+	var output Tok_acct_fungible_holdings_t
+
+	if limit<default_limit {
 		limit=default_limit
 	}
+	output.Holdings=make([]Account_fungible_holding_t,0,8)
+	var query string
+	query=`
+		SELECT 
+			t.contract_id,
+			c.address AS contract_address,
+			t.symbol,
+			t.name,
+			t.decimals,
+			t.total_supply,
+			s.sum_amount AS amount
+		FROM token AS t
+		LEFT JOIN account AS c ON t.contract_id=c.account_id,
+		(
+			SELECT h.contract_id,Sum(h.amount) AS sum_amount
+			FROM ft_hold AS h,tokacct AS a
+			WHERE (h.tokacct_id=a.account_id) AND (a.address  IN(`+address_list+`))
+			GROUP BY h.contract_id
+		) AS s
+		WHERE s.contract_id=t.contract_id
+		LIMIT $1
+		OFFSET $2
+		`
+	rows,err:=db.Query(query,limit,offset);
+	if (err!=nil) {
+		if err!=sql.ErrNoRows {
+			return output,err
+		}
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var holding Account_fungible_holding_t 
+		err:=rows.Scan(
+			&holding.Token.Contract_id,
+			&holding.Token.Contract_addr,
+			&holding.Token.Symbol,
+			&holding.Token.Name,
+			&holding.Token.Decimals,
+			&holding.Token.Total_supply,
+			&holding.Value)
+		if (err!=nil) {
+			if err==sql.ErrNoRows {
+				break;
+			} else {
+				Error.Println(fmt.Sprintf("Scan failed at Getblocktransactions(): %v",err))
+				os.Exit(2)
+			}
+		}
+		output.Holdings=append(output.Holdings,holding)
+	}
+	output.Offset=offset;
+	output.Limit=limit;
+	return output,nil
+}
+func Get_fungible_token_sum(address_list string) ([]Json_ftoken_sum_t,error) {
+	var output []Json_ftoken_sum_t
+	output=make([]Json_ftoken_sum_t,0,8)
+	var query string
+	query=`
+		SELECT 
+			c.address AS contract_address,
+			t.symbol,
+			t.decimals,
+			s.sum_amount AS amount
+		FROM token AS t
+		LEFT JOIN account AS c ON t.contract_id=c.account_id,
+		(
+				SELECT h.contract_id,Sum(h.amount) AS sum_amount
+				FROM ft_hold AS h,tokacct AS a
+				WHERE (h.tokacct_id=a.account_id) AND (a.address  IN(`+address_list+`))
+				GROUP BY h.contract_id
+		) AS s
+		WHERE s.contract_id=t.contract_id
+		`
+	rows,err:=db.Query(query);
+	if (err!=nil) {
+		if err!=sql.ErrNoRows {
+			return output,err
+		}
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var holding Json_ftoken_sum_t
+		err:=rows.Scan(
+			&holding.Contract_addr,
+			&holding.Symbol,
+			&holding.Decimals,
+			&holding.Balance)
+		if (err!=nil) {
+			if err==sql.ErrNoRows {
+				break;
+			} else {
+				Error.Println(fmt.Sprintf("Scan failed at Getblocktransactions(): %v",err))
+				os.Exit(2)
+			}
+		}
+		output=append(output,holding)
+	}
+	return output,nil
+}
+func Get_account_nonfungible_tokens(acct_addr string,offset int,limit int) (Tok_acct_nonfungible_holdings_t ,error) {
+	var output Tok_acct_nonfungible_holdings_t
+
+	if limit<default_limit {
+		limit=default_limit
+	}
+	output.Holdings=make(map[int]*Json_nonfungible_holding_t)
+
+	if (limit==0) {
+		limit=default_limit
+	}
+	var query string
+	query=`
+		SELECT 
+			h.contract_id,
+			a.address AS account_address,
+			h.token_id
+		FROM nft_hold AS h,tokacct AS a
+		WHERE h.tokacct_id IN(`+acct_addr+`) AND (h.tokacct_id=tokacct.account_id)
+		LIMIT $2
+		OFFSET $3
+		`
+	rows,err:=db.Query(query,limit,offset);
+	if err!=nil {
+		if err!=sql.ErrNoRows {
+			return output,err
+		}
+	}
+	defer rows.Close()
+	var IN_str string
+	for rows.Next() {
+		var token_id,account_address string
+		var contract_id int
+		err:=rows.Scan(&contract_id,&account_address,&token_id)
+		if (err!=nil) {
+			if err==sql.ErrNoRows {
+				break;
+			} else {
+				Error.Println(fmt.Sprintf("Scan failed at getting nonfungible token ids: %v",err))
+				os.Exit(2)
+			}
+		}
+		map_entry,exists:=output.Holdings[contract_id]
+		if exists {
+			map_entry.Token_IDs=append(map_entry.Token_IDs,token_id)
+		} else {
+			map_entry=new(Json_nonfungible_holding_t)
+			output.Holdings[contract_id]=map_entry
+		}
+		if len(IN_str)>0 {
+			IN_str=IN_str+","
+		}
+		IN_str=IN_str+strconv.Itoa(contract_id)
+	}
+	if len(IN_str)>0 {
+		query=`
+			SELECT 
+				t.contract_id,
+				c.address AS contract_address,
+				t.symbol,
+				t.name,
+				t.total_supply 
+			FROM token AS t
+			LEFT JOIN account AS c ON t.contract_id=c.account_id
+			WHERE t.contract_id IN(`+IN_str+`)`
+		rows,err=db.Query(query);
+		if (err!=nil) {
+			Error.Println(fmt.Sprintf("failed to execute query: %v, contract_ids=%v, error=%v",query,IN_str,err))
+			os.Exit(2)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var contract_id int
+			var contract_address,symbol,name,total_supply string
+			err:=rows.Scan(&contract_id,&contract_address,&symbol,&name,&total_supply)
+			if (err!=nil) {
+				if err==sql.ErrNoRows {
+					break;
+				} else {
+					return output,err
+				}
+			}
+			map_entry,exists:=output.Holdings[contract_id]
+			if exists {
+				map_entry.Token.Contract_id=contract_id
+				map_entry.Token.Contract_addr=contract_address
+				map_entry.Token.Symbol=symbol
+				map_entry.Token.Name=name
+				map_entry.Token.Total_supply=total_supply
+			} else {
+				Error.Println(fmt.Sprintf("Internal bug: contract_id=%v not found in the token map",contract_id))
+				os.Exit(2)
+			}
+		}
+	}
+	output.Offset=offset;
+	output.Limit=limit;
+	return output,nil
+}
+func Get_account_ft_approvals(contract_addr,account_addr string) (Tok_acct_approvals_t,error) {
+	var output Tok_acct_approvals_t
+	var query string
+
+	var err error
+	output.Account_address=account_addr
+	output.Token,err=Get_token_info(contract_addr)
+	if err!=nil {
+		return output,err
+	}
+	account_id,err:=lookup_token_account(account_addr)
+	if err!=nil {
+		return output,errors.New(fmt.Sprintf("Can't find account %v in token accounts",account_addr))
+	}
+	query=`
+		SELECT 
+			ap.block_num,
+			ap.block_ts,
+			ap.value,
+			ap.value_consumed,
+			ap.value-ap.value_consumed AS value_remaining,
+			src.address,
+			tx_hash
+		FROM approval AS ap,tokacct AS src,transaction AS tx
+		WHERE
+			ap.contract_id=$1 AND
+			ap.to_id=$2 AND
+			ap.expired=FALSE AND
+			ap.from_id=src.account_id AND
+			ap.tx_id=tx.tx_id
+		ORDER BY block_num DESC
+		`
+	rows,err:=db.Query(query,output.Token.Contract_id,account_id)
+	if err!=nil {
+		if err==sql.ErrNoRows {
+			return output,nil
+		}
+		return output,err
+	}
+	defer rows.Close()
+	output.Approvals=make([]Tok_approval_t,0,4)
+	for rows.Next() {
+		var approval Tok_approval_t
+		approval.To=account_addr
+		err=rows.Scan(&approval.Block_num,&approval.Timestamp,&approval.Amount_approved,&approval.Amount_transferred,&approval.Amount_remaining,&approval.From,&approval.Tx_hash)
+		if err!=nil {
+			Error.Println(fmt.Sprintf("Error at Scan() while retrieving approval: %v",err))
+		}
+		output.Approvals=append(output.Approvals,approval)
+	}
+	return output,nil
+}
+func Query_transactions_by_acct_addr(acct_addr string,offset,limit int) ([]Json_transaction_t,error) {
+	var transactions []Json_transaction_t=make([]Json_transaction_t,0,32)
 	acct_addr=strings.ToLower(acct_addr)
-	account_id,_,_:=lookup_account(acct_addr)
+	account_id,_,_,err:=lookup_account(acct_addr)
+	if err!=nil {
+		return transactions,err
+	}
 	var query string
 	query=`
 		SELECT 
@@ -184,7 +567,6 @@ func Get_account_transactions(acct_addr string,offset int,limit int) (Json_tx_se
 			tx.gas_used,
 			tx.gas_price,
 			tx.nonce::text,
-			tx.block_id,
 			tx.block_num,
 			tx.tx_index,
 			tx.tx_status,
@@ -199,7 +581,7 @@ func Get_account_transactions(acct_addr string,offset int,limit int) (Json_tx_se
 			(from_id=$1) OR
 			(to_id=$1) 
 		)
-		ORDER BY tx.block_num DESC,tx.tx_index DESC
+		ORDER BY bnumtx DESC
 		LIMIT $2
 		OFFSET $3
 		`
@@ -211,7 +593,7 @@ func Get_account_transactions(acct_addr string,offset int,limit int) (Json_tx_se
 	defer rows.Close()
 	for rows.Next() {
 		var tx Json_transaction_t
-		err:=rows.Scan(&tx.Tx_id,&tx.From_id,&tx.To_id,&tx.From_addr,&tx.To_addr,&tx.Value,&tx.Tx_hash,&tx.Gas_limit,&tx.Gas_used,&tx.Gas_price,&tx.Nonce,&tx.Block_id,&tx.Block_num,&tx.Tx_index,&tx.Tx_status,&tx.V,&tx.R,&tx.S,&tx.Tx_error)
+		err:=rows.Scan(&tx.Tx_id,&tx.From_id,&tx.To_id,&tx.From_addr,&tx.To_addr,&tx.Value,&tx.Tx_hash,&tx.Gas_limit,&tx.Gas_used,&tx.Gas_price,&tx.Nonce,&tx.Block_num,&tx.Tx_index,&tx.Tx_status,&tx.V,&tx.R,&tx.S,&tx.Tx_error)
 		if (err!=nil) {
 			if err==sql.ErrNoRows {
 				break;
@@ -220,57 +602,60 @@ func Get_account_transactions(acct_addr string,offset int,limit int) (Json_tx_se
 				os.Exit(2)
 			}
 		}
-		output.Transactions=append(output.Transactions,tx)
+		transactions=append(transactions,tx)
+	}
+	return transactions,err
+}
+func Get_account_transactions(acct_addr string,offset int,limit int) (Json_tx_set_t,error) {
+	var output Json_tx_set_t
+
+	if limit==0 {
+		limit=default_limit
 	}
 	output.Offset=offset;
 	output.Limit=limit;
-	output.Account_id=int(account_id);
-	output.Account_address=acct_addr
-	output.Account_balance,err=get_account_balance(account_id)
+	output.Account,_,_=Get_account(acct_addr)
+	var err error
+	output.Transactions,err=Query_transactions_by_acct_addr(acct_addr,offset,limit)
 	return output,err
 }
-func Get_account_value_transfers(acct_addr string,offset int,limit int) (Json_vt_set_t,error) {
-	var output	Json_vt_set_t
+func Query_value_transfers_by_acct_addr(acct_addr string,offset,limit int) ([]Json_value_transfer_t,error) {
+	var value_transfers	[]Json_value_transfer_t=make([]Json_value_transfer_t,0,32)
 
-	if (limit==0) {
-		limit=default_limit
+	account_id,_,_,err:=lookup_account(acct_addr)
+	if err!=nil {
+		return value_transfers,err
 	}
-	if strings.ToUpper(acct_addr)=="BLOCKCHAIN" {
-		acct_addr="0"
-	} else {
-		acct_addr=strings.ToLower(acct_addr)
-	}
-	account_id,_,_:=lookup_account(acct_addr)
 	var query string
+	rows_to_get:=offset+limit
 	query=`
-		SELECT 
-			v.valtr_id,
-			v.block_num,
-			v.from_id,
-			v.to_id,
-			src.address,
-			dst.address,
-			v.from_balance::text,
-			v.to_balance::text,
-			v.value::text,
-			v.kind,
-			v.tx_id,
-			t.tx_hash,
-			v.error
-		FROM 
-			value_transfer AS v
+		SELECT
+		v.valtr_id,v.block_num,v.from_id,v.to_id,src.address,dst.address,v.from_balance,v.to_balance,v.value,v.kind,v.tx_id,t.tx_hash,v.error
+		FROM (
+			(
+				SELECT valtr_id,block_num,bnumvt,from_id,to_id,from_balance::text,to_balance::text,value,kind,tx_id,error
+				FROM value_transfer
+				WHERE from_id=$1
+				ORDER BY bnumvt DESC LIMIT $2
+			) UNION ALL (
+				SELECT valtr_id,block_num,bnumvt,from_id,to_id,from_balance::text,to_balance::text,value,kind,tx_id,error
+				FROM value_transfer
+				WHERE to_id=$1
+				ORDER BY bnumvt DESC LIMIT $2
+			)
+		) AS v
 		LEFT JOIN account AS src ON v.from_id=src.account_id
 		LEFT JOIN account AS dst ON v.to_id=dst.account_id
 		LEFT JOIN transaction AS t ON v.tx_id=t.tx_id
-		WHERE 
-			(
-				(v.from_id=$1) OR (v.to_id=$1)
-			)  
-			ORDER BY block_num DESC,valtr_id DESC
-			LIMIT $2
-			OFFSET $3
-		`
-	rows,err:=db.Query(query,account_id,limit,offset);
+		ORDER BY v.bnumvt DESC
+		LIMIT $3
+		OFFSET $4
+	`
+	dquery:=strings.Replace(query,`$1`,strconv.Itoa(account_id),-1)
+	dquery=strings.Replace(dquery,`$2`,strconv.Itoa(rows_to_get),-1)
+	dquery=strings.Replace(dquery,`$3`,strconv.Itoa(limit),-1)
+	dquery=strings.Replace(dquery,`$4`,strconv.Itoa(offset),-1)
+	rows,err:=db.Query(query,account_id,rows_to_get,limit,offset);
 	if (err!=nil) {
 		Error.Println(fmt.Sprintf("failed to execute query: %v, account_id=%v, error=%v",query,account_id,err))
 		os.Exit(2)
@@ -320,14 +705,26 @@ func Get_account_value_transfers(acct_addr string,offset int,limit int) (Json_vt
 				vt.Direction=1
 			}
 		}
-		output.Value_transfers=append(output.Value_transfers,vt)
+		value_transfers=append(value_transfers,vt)
+	}
+	return value_transfers,err
+}
+func Get_account_value_transfers(acct_addr string,offset int,limit int) (Json_vt_set_t,error) {
+	var output	Json_vt_set_t
 
+	if (limit==0) {
+		limit=default_limit
+	}
+	if strings.ToUpper(acct_addr)=="BLOCKCHAIN" {
+		acct_addr="0"
+	} else {
+		acct_addr=strings.ToLower(acct_addr)
 	}
 	output.Offset=offset;
 	output.Limit=limit;
-	output.Account_id=int(account_id);
-	output.Account_address=acct_addr
-	output.Account_balance,err=get_account_balance(account_id)
+	output.Account,_,_=Get_account(acct_addr)
+	var err error
+	output.Value_transfers,err=Query_value_transfers_by_acct_addr(acct_addr,offset,limit)
 	return output,err
 }
 func Get_transaction_value_transfers(transaction_hash string) (Json_vt_set_t,error) {
@@ -354,7 +751,7 @@ func Get_transaction_value_transfers(transaction_hash string) (Json_vt_set_t,err
 			LEFT JOIN account AS dst ON v.to_id=dst.account_id,
 			transaction tx
 		WHERE (tx.tx_hash=$1) AND (v.tx_id=tx.tx_id)
-		ORDER BY v.valtr_id ASC
+		ORDER BY v.bnumvt ASC
 		`
 	rows,err:=db.Query(query,transaction_hash);
 	if (err!=nil) {
@@ -402,17 +799,312 @@ func Get_transaction_value_transfers(transaction_hash string) (Json_vt_set_t,err
 	}
 	output.Offset=0;
 	output.Limit=0;
-	output.Account_id=0;
-	output.Account_address=`N/A`
+	return output,nil
+}
+func Get_token_info(contract_address string) (Token_info_t,error) {
+	var output Token_info_t
+
+	output.Search_string=contract_address
+	var query string
+	query=`
+		SELECT contract_id,num_transfers,tk.block_created,tx.tx_hash,symbol,name,decimals,total_supply,non_fungible 
+		FROM token AS tk 
+		LEFT JOIN transaction AS tx ON tk.created_tx_id=tx.tx_id,
+		account AS a
+		WHERE tk.contract_id=a.account_id AND a.address=$1
+	`
+	row:=db.QueryRow(query,contract_address)
+	output.Contract_addr=contract_address
+	err:=row.Scan(&output.Contract_id,
+		&output.Num_transfers,
+		&output.Block_created,
+		&output.Tx_hash,
+		&output.Symbol,
+		&output.Name,
+		&output.Decimals,
+		&output.Total_supply,
+		&output.Non_fungible)
+	if err!=nil {
+		if err==sql.ErrNoRows {
+			return output,nil
+		} else {
+			return output,err
+		}
+	}
+	Info.Println(fmt.Sprintf("Token info: returning contract_id=%v",output.Contract_id))
+	return output,err
+}
+func Get_token_holders(contract_address string,offset int,limit int) (Token_holders_t,error) {
+	var output Token_holders_t
+	var query string
+
+	if limit<default_limit {
+		limit=default_limit
+	}
+	var err error
+	output.Token,err=Get_token_info(contract_address)
+	if err!=nil {
+		Error.Println(fmt.Sprintf("Error getting token info %v",err))
+		os.Exit(2)
+	}
+	query=`SELECT a.address,h.amount FROM ft_hold AS h LEFT JOIN tokacct as a ON h.tokacct_id=a.account_id WHERE contract_id=$1  ORDER by amount DESC limit $2 OFFSET $3`
+	Info.Println(fmt.Sprintf(`SELECT a.address,h.amount FROM ft_hold WHERE contract_id=%v ORDER by amount DESC limit %v OFSSET %v`,output.Token.Contract_id,limit,offset))
+	rows,err:=db.Query(query,output.Token.Contract_id,limit,offset)
+	if err!=nil {
+		Error.Println(fmt.Sprintf("Error at query %v: %v",query,err))
+		os.Exit(2)
+	}
+	defer rows.Close()
+	holders:=make([]Tok_acct_holder_t,0,limit)
+	for rows.Next() {
+		var holder_account Tok_acct_holder_t
+		err=rows.Scan(&holder_account.Address,&holder_account.Balance)
+		if err!=nil {
+			return output,err
+		}
+		holders=append(holders,holder_account)
+	}
+	output.Holders=holders
+	output.Offset=offset;
+	output.Limit=limit;
+	return output,nil
+
+}
+func Get_token_transfers(contract_address string,offset int,limit int) (Token_transfers_t,error) {
+	var output Token_transfers_t
+
+	if limit<default_limit {
+		limit=default_limit
+	}
+	if offset<0 {
+		offset=0;
+	}
+	var err error
+	output.Token,err=Get_token_info(contract_address)
+	if err!=nil {
+		Error.Println(fmt.Sprintf("Error getting token info %v",err))
+		os.Exit(2)
+	}
+	var query string
+	query=`
+		SELECT op.tokop_id,tx.tx_hash,op.block_num,op.block_ts,src.address,dst.address,op.value,op.from_balance,op.to_balance,op.kind,op.non_fungible
+		FROM tokop AS op
+		LEFT JOIN tokacct AS src ON op.from_id=src.account_id
+		LEFT JOIN tokacct AS dst ON op.to_id=dst.account_id
+		LEFT JOIN transaction AS tx ON op.tx_id=tx.tx_id
+		WHERE contract_id=$1
+		ORDER BY op.block_num DESC,op.tokop_id DESC
+		LIMIT $2
+		OFFSET $3
+	`
+	rows,err:=db.Query(query,output.Token.Contract_id,limit,offset)
+	if err!=nil {
+		Error.Println(fmt.Sprintf("Error at query %v: %v",query,err))
+		os.Exit(2)
+	}
+	defer rows.Close()
+	tokops:=make([]Tok_transfer_t,0,limit)
+	for rows.Next() {
+		var op Tok_transfer_t
+		err=rows.Scan(&op.Tokop_id,&op.Tx_hash,&op.Block_num,&op.Ts_created,&op.From,&op.To,&op.Value,&op.From_balance,&op.To_balance,&op.Kind,&op.Non_fungible)
+		if err!=nil {
+			return output,err
+		}
+		tokops=append(tokops,op)
+	}
+	output.Tokops=tokops
+	output.Offset=offset;
+	output.Limit=limit;
+	return output,nil
+}
+func Get_token_approvals(contract_address string,offset int,limit int) (Token_approvals_t,error) {
+	var output Token_approvals_t
+
+	if limit<default_limit {
+		limit=default_limit
+	}
+	if offset<0 {
+		offset=0;
+	}
+	var err error
+	output.Token,err=Get_token_info(contract_address)
+	if err!=nil {
+		Error.Println(fmt.Sprintf("Error getting token info %v",err))
+		os.Exit(2)
+	}
+	var query string
+	query=`
+		SELECT tx.tx_hash,ap.block_num,ap.block_ts,src.address,dst.address,ap.value,ap.value_consumed,ap.value-ap.value_consumed AS remaining,ap.expired
+		FROM approval AS ap
+		LEFT JOIN tokacct AS src ON ap.from_id=src.account_id
+		LEFT JOIN tokacct AS dst ON ap.to_id=dst.account_id
+		LEFT JOIN transaction AS tx ON ap.tx_id=tx.tx_id
+		WHERE contract_id=$1
+		ORDER BY ap.block_num DESC,ap.approval_id DESC
+		LIMIT $2
+		OFFSET $3
+	`
+	Info.Println(fmt.Sprintf("%v",query))
+	Info.Println(fmt.Sprintf("contract_id=%v,offset=%v, limit=%v",output.Token.Contract_id,offset,limit))
+	rows,err:=db.Query(query,output.Token.Contract_id,limit,offset)
+	if err!=nil {
+		Error.Println(fmt.Sprintf("Error at query %v: %v",query,err))
+		os.Exit(2)
+	}
+	defer rows.Close()
+	approvals:=make([]Tok_approval_t,0,limit)
+	for rows.Next() {
+		var ap Tok_approval_t
+		err=rows.Scan(&ap.Tx_hash,&ap.Block_num,&ap.Timestamp,&ap.From,&ap.To,&ap.Amount_approved,&ap.Amount_transferred,&ap.Amount_remaining,&ap.Expired)
+		if err!=nil {
+			return output,err
+		}
+
+		approvals=append(approvals,ap)
+	}
+	output.Approvals=approvals
+	output.Offset=offset;
+	output.Limit=limit;
+	return output,nil
+}
+func Get_tokops(contract_address,account_address string,offset int,limit int) (Token_transfers_t,error) {
+	var output Token_transfers_t
+
+	if limit<default_limit {
+		limit=default_limit
+	}
+	if offset<0 {
+		offset=0;
+	}
+	var err error
+	output.Account_address=account_address
+	output.Token,err=Get_token_info(contract_address)
+	if err!=nil {
+		return output,err
+	}
+	account_id,err:=lookup_token_account(account_address)
+	if err!=nil {
+		return output,errors.New(fmt.Sprintf("Can't find account %v in token accounts",account_address))
+	}
+	var query string
+	query=`
+		SELECT op.tokop_id,tx.tx_hash,op.block_num,op.block_ts,src.address,dst.address,op.value,op.from_balance,op.to_balance,op.kind,op.non_fungible
+		FROM (
+			(
+				SELECT tokop_id,block_num,tx_id,from_id,to_id,value,from_balance,to_balance,kind,block_ts,non_fungible
+				FROM tokop 
+				WHERE (contract_id=$1) AND (from_id=$2)
+			) UNION ALL (
+				SELECT tokop_id,block_num,tx_id,from_id,to_id,value,from_balance,to_balance,kind,block_ts,non_fungible
+				FROM tokop 
+				WHERE (contract_id=$1) AND (to_id=$2)
+			)
+		) AS op
+		LEFT JOIN tokacct AS src ON op.from_id=src.account_id
+		LEFT JOIN tokacct AS dst ON op.to_id=dst.account_id
+		LEFT JOIN transaction AS tx ON op.tx_id=tx.tx_id
+		ORDER BY op.block_num DESC,op.tokop_id DESC
+		LIMIT $3
+		OFFSET $4
+	`
+	rows,err:=db.Query(query,output.Token.Contract_id,account_id,limit,offset)
+	if err!=nil {
+		return output,err
+	}
+	defer rows.Close()
+	tokops:=make([]Tok_transfer_t,0,limit)
+	for rows.Next() {
+		var op Tok_transfer_t
+		err=rows.Scan(&op.Tokop_id,&op.Tx_hash,&op.Block_num,&op.Ts_created,&op.From,&op.To,&op.Value,&op.From_balance,&op.To_balance,&op.Kind,&op.Non_fungible)
+		if err!=nil {
+			return output,err
+		}
+		tokops=append(tokops,op)
+	}
+	output.Tokops=tokops
+	output.Offset=offset;
+	output.Limit=limit;
+	return output,nil
+}
+func Get_fungible_token_account_balance(contract_address,account_address string) (Json_ft_acct_bal_t,error) {
+	var output Json_ft_acct_bal_t
+
+	output.Contract_address=contract_address
+	output.Account_address=account_address
+	output.Balance="0"
+	contract_id,_,_,err:=lookup_account(contract_address)
+	if err!=nil {
+		return output,err
+	}
+	account_id,err:=lookup_token_account(account_address)
+	if err!=nil {
+		return output,err
+	}
+	var query string
+	query=get_fungible_token_balance_query()
+	row:=db.QueryRow(query,contract_id,account_id)
+	var (
+		tmp_tokop_id		int64
+		tmp_tx_id			int64
+		tmp_contract_id		int64
+		tmp_block_num		int64
+		tmp_block_ts		int64
+		tmp_from_id			int
+		tmp_to_id			int
+		tmp_from_balance	string
+		tmp_to_balance		string
+		tmp_value			string
+		tmp_kind			byte
+	)
+
+	err=row.Scan(&tmp_tokop_id,&tmp_tx_id,&tmp_contract_id,&tmp_block_num,&tmp_block_ts,&tmp_from_id,&tmp_to_id,&tmp_from_balance,&tmp_to_balance,&tmp_value,&tmp_kind)
+	if err!=nil {
+		if err==sql.ErrNoRows {
+			err=nil
+		}
+		return output,err
+	}
+	if tmp_to_id==tmp_from_id {// selftransfer
+		output.Balance=tmp_to_balance
+	} else {
+		if tmp_to_id==account_id {
+			output.Balance=tmp_to_balance
+		} 
+		if tmp_from_id==account_id {
+			output.Balance=tmp_from_balance
+		}
+	}
 	return output,nil
 }
 func Main_stats() (Json_main_stats_t,error) {
 	var out Json_main_stats_t
 
 	var query string
-	query="SELECT round(hash_rate)::text,round(block_time,2)::text,round(tx_per_block,1)::text,gas_price::text,tx_cost::text,supply::text,round(difficulty)::text,last_block::text FROM mainstats"
+	query=`SELECT 
+				round(hash_rate)::text,
+				round(block_time,2)::text,
+				round(tx_per_block,1)::text,
+				round(tx_per_sec,1)::text,
+				gas_price::text,
+				tx_cost::text,
+				round(supply/1000000000000000000)::text,
+				round(difficulty)::text,
+				round(volume,2),
+				round(activity),
+				last_block::text 
+				FROM mainstats`
 	row := db.QueryRow(query)
-	err:=row.Scan(&out.Hash_rate,&out.Block_time,&out.Tx_per_block,&out.Gas_price,&out.Tx_cost,&out.Supply,&out.Difficulty,&out.Last_block);
+	err:=row.Scan(  &out.Hash_rate,
+					&out.Block_time,
+					&out.Tx_per_block,
+					&out.Tx_per_sec,
+					&out.Gas_price,
+					&out.Tx_cost,
+					&out.Supply,
+					&out.Difficulty,
+					&out.Volume,
+					&out.Activity,
+					&out.Last_block);
 	if (err!=nil) {
 		Error.Println(fmt.Sprintf("Error at Scan() in Mainstats(): %v",err))
 		os.Exit(2)
@@ -424,20 +1116,19 @@ func Search(search_text string) (Json_search_result_t,error) {
 	var found bool
 
 	slen:=len(search_text)
+	Info.Println(fmt.Sprintf("Search term: %v; length=%v",search_text,slen))
 	if (slen>2) {
 		if (search_text[0]=='0') && (search_text[1]=='x') { // 0x hexadecimal prefix
 			search_text=search_text[2:]
 		}
 	}
-
 	search_res.Search_text=search_text
 	if (strings.ToUpper(search_text)=="BLOCKCHAIN") {
-		search_res.Account_id,_,search_res.Account_balance=lookup_account("0")
-		if (search_res.Account_id==-1) {
-			search_res.Search_text="BLOCKCHAIN"
-			search_res.Object_type=JSON_OBJ_TYPE_ACCOUNT
-			return search_res,nil
-		}
+		Info.Println(fmt.Sprintf("searching BLOCKCHAIN"))
+		search_res.Search_text="BLOCKCHAIN"
+		search_res.Object_type=JSON_OBJ_TYPE_ACCOUNT
+		search_res.Account,_,_=Get_account("0")
+		return search_res,nil
 	}
 
 	// First, GetBlockByNumber()
@@ -456,10 +1147,19 @@ func Search(search_text string) (Json_search_result_t,error) {
 	}
 	// now by address
 	addr_str:=strings.ToLower(search_text)
-	search_res.Account_id,_,search_res.Account_balance=lookup_account(addr_str)
-	if (search_res.Account_id!=0) {
+	account,account_found,_:=Get_account(addr_str)
+	if account_found {
 		search_res.Object_type=JSON_OBJ_TYPE_ACCOUNT
-		return search_res,err
+		search_res.Account=account
+		Info.Println(fmt.Sprintf("Returning data for Account %v",search_text))
+		return search_res,nil
+	} else {
+		if len(search_text)==40 { // it is an address
+			search_res.Object_type=JSON_OBJ_TYPE_ACCOUNT
+			search_res.Account=account
+			Info.Println(fmt.Sprintf("Account %v was not found.",search_text))
+			return search_res,nil
+		}
 	}
 	search_res.Transaction,err=Get_transaction(search_text)
 	if (err==nil) {
@@ -469,8 +1169,8 @@ func Search(search_text string) (Json_search_result_t,error) {
 	}
 	return search_res,nil
 }
-func Get_block_list(up_to_block int) ([]Last_block_info_t,error) {
-	var last_blocks []Last_block_info_t
+func Get_block_list(up_to_block int) ([]Json_aex_bhdr_t,error) {
+	var last_blocks []Json_aex_bhdr_t
 
 	if (up_to_block < -1 ) {
 		return last_blocks,errors.New("Invalid parameter")
@@ -485,74 +1185,124 @@ func Get_block_list(up_to_block int) ([]Last_block_info_t,error) {
 		last_block_num=up_to_block
 	}
 	var query string
-	query="SELECT block_num,num_tx FROM block WHERE block_num<=$1 ORDER BY block_num DESC LIMIT 9"
+	query="SELECT b.block_num,b.num_tx,b.num_vt,b.val_transferred,address AS miner FROM block AS b,account WHERE (block_num<=$1) AND (miner_id=account.account_id) ORDER BY block_num DESC LIMIT 9"
 	rows,err:=db.Query(query,last_block_num)
 	defer rows.Close()
+	if err!=nil {
+		Error.Println(fmt.Sprintf("Error at Get_block_list(): %v",err))
+		os.Exit(2)
+	}
 	for rows.Next() {
-		var block_info Last_block_info_t
-		err=rows.Scan(&block_info.Block_number,&block_info.Num_transactions)
+		var hdr Json_aex_bhdr_t
+		err=rows.Scan(&hdr.Block_number,&hdr.Num_transactions,&hdr.Num_value_transfers,&hdr.Val_transferred,&hdr.Miner)
 		if (err!=nil) {
 			Error.Println(fmt.Sprintf("Error at rows.Scan() in Get_block_list: %v",err))
 			os.Exit(2)
 		}
-		last_blocks=append(last_blocks,block_info)
+		last_blocks=append(last_blocks,hdr)
 	}
 	return last_blocks,nil
 }
-func Get_block(block_num int,hash string) (Json_block_t,bool,error) {
-	var output Json_block_t
+func Get_account(acct_addr string) (Json_account_t,bool,error) {
+	var found bool=false;
+	var o Json_account_t	// output
 	var query string
 
-	var where_condition string = "block_num=$1"
-	query=`
-		SELECT 
-			b.block_num,
-			b.block_hash,
-			b.block_ts,
-			m.address,
-			b.num_tx,
-			b.num_vt,
-			b.num_uncles,
-			b.difficulty,
-			b.total_dif,
-			b.gas_used,
-			b.gas_limit,
-			b.size,
-			b.nonce,
-			b.parent_id,
-			b.uncle_hash,
-			b.extra
-		FROM block AS b
-		LEFT JOIN account AS m ON b.miner_id=m.account_id
-		WHERE `
-	var row *sql.Row
-	if (block_num==-1) {
-		where_condition="block_hash=$1"
-		row=db.QueryRow(query+where_condition,hash);
+	acct_addr=strings.ToLower(acct_addr)
+	o.Address=acct_addr
+	if len(acct_addr)<2 {
+		if acct_addr!="0" { // blockchain account code
+			return o,found,errors.New("Invalid address")
+		}
 	} else {
-		where_condition="block_num=$1"
-		row=db.QueryRow(query+where_condition,block_num);
-	}
-	var parent_id int64
-	err:=row.Scan(&output.Number,&output.Hash,&output.Timestamp,&output.Miner,&output.Num_transactions,&output.Num_value_transfers,&output.Num_uncles,&output.Difficulty,&output.Total_difficulty,&output.Gas_used,&output.Gas_limit,&output.Size,&output.Nonce,&parent_id,&output.Sha3uncles,&output.Extra_data)
-	if (err!=nil) {
-		if (err==sql.ErrNoRows) {
-			return output,false,errors.New(fmt.Sprintf("Block number %v not found",block_num))
-		} else {
-			return output,false,errors.New(fmt.Sprintf("SQL error: %v",err))
+		if (acct_addr[0]=='0') && (acct_addr[1]=='x') {
+			acct_addr=acct_addr[2:]
 		}
 	}
-	last_block_num:=get_last_block()
-	if (last_block_num<0) {
-		return output,true,errors.New(fmt.Sprintf("Probably the database is empty, last block number is < 0"))
+	query=`
+		SELECT 
+			a.account_id,
+			a.owner_id,
+			a.last_balance,
+			a.num_tx,
+			a.num_vt,
+			a.ts_created,
+			a.block_created,
+			a.deleted,
+			a.block_sd,
+			a.address,
+			o.address as owner_address
+		FROM account as a
+		LEFT JOIN account as o ON a.owner_id=o.account_id
+		WHERE a.address=$1
+	`
+	var row *sql.Row
+	row=db.QueryRow(query,acct_addr);
+	var tmp_owner_address sql.NullString
+	err:=row.Scan(&o.Account_id,&o.Owner_id,&o.Balance,&o.Num_transactions,&o.Num_value_transfers,&o.Ts_created,&o.Block_created,&o.Deleted,&o.Block_suicided,&o.Address,&tmp_owner_address)
+	if err!=nil {
+		if (err==sql.ErrNoRows) {
+			return o,found,nil
+		} else {
+			return o,found,err
+		}
 	}
-	output.Confirmations=last_block_num-int(output.Number)
-	query="SELECT block_num,block_hash FROM block WHERE block_id=$1"
-	row=db.QueryRow(query,parent_id)
-	if (err==sql.ErrNoRows) {
-		return output,true,errors.New(fmt.Sprintf("Parent block (id=%v) not found",parent_id))
+	if tmp_owner_address.Valid {
+		o.Owner_address=tmp_owner_address.String
 	}
-	return output,true,nil
+	found=true
+	return o,found,nil
+}
+func Get_token_account(acct_addr string) (Json_tokacct_t,bool,error) {
+	var found bool=false;
+	var o Json_tokacct_t	// output
+	var query string
+
+	o.Address=acct_addr
+	acct_addr=strings.ToLower(acct_addr)
+	if len(acct_addr)<2 {
+		return o,found,errors.New("Invalid address")
+	}
+	if (acct_addr[0]=='0') && (acct_addr[1]=='x') {
+		acct_addr=acct_addr[2:]
+	}
+	query=`
+		SELECT 
+			a.account_id,
+			a.ts_created,
+			a.block_created,
+			a.address
+		FROM tokacct as a
+		WHERE a.address=$1
+	`
+	var row *sql.Row
+	row=db.QueryRow(query,acct_addr);
+	err:=row.Scan(&o.Account_id,&o.Ts_created,&o.Block_created,&o.Address)
+	if (err!=nil) {
+		if (err==sql.ErrNoRows) {
+		} else {
+			found=true
+		}
+	}
+	query=`
+		SELECT contract_id FROM tokop
+		WHERE to_id=$1
+		ORDER BY block_num DESC LIMIT 1
+		`
+	o.Has_tokens=false
+	var cid int
+	row=db.QueryRow(query,o.Account_id);
+	err=row.Scan(&cid)
+	if err!=nil {
+		if (err==sql.ErrNoRows) {
+		} else {
+			return o,found,err;
+		}
+	} else {
+		o.Has_tokens=true
+	}
+	
+	return o,found,nil
 }
 func Get_uncles(block_num int) (Json_uncles_t,error) {
 	var output Json_uncles_t
@@ -577,7 +1327,7 @@ func Get_uncles(block_num int) (Json_uncles_t,error) {
 			LEFT JOIN account AS m ON u.miner_id=m.account_id,
 			block AS p
 		WHERE 
-			(u.block_id=p.block_id) AND (p.block_num=$1)
+			p.block_num=$1
 		`
 	rows,err:=db.Query(query,block_num)
 	defer rows.Close()
@@ -637,29 +1387,33 @@ func Get_transaction(hash string) (Json_transaction_t,error) {
 			tx.tx_id,
 			tx.from_id,
 			tx.to_id,
+			b.block_ts,
 			src.address AS from_addr,
 			dst.address AS to_addr,
 			tx.tx_value::text,
+			tx.val_transferred::text,
 			tx.tx_hash,
 			tx.gas_limit,
 			tx.gas_used,
 			tx.gas_price,
 			tx.nonce::text,
-			tx.block_id,
 			tx.block_num,
 			tx.tx_index,
 			tx.tx_status,
+			tx.num_vt,
 			tx.v,
 			tx.r,
 			tx.s,
-			tx.tx_error
+			tx.tx_error,
+			tx.vm_error
 		FROM transaction AS tx
 		LEFT JOIN account as src ON tx.from_id=src.account_id
-		LEFT JOIN account as dst ON tx.to_id=dst.account_id
-		WHERE tx.tx_hash=$1 
+		LEFT JOIN account as dst ON tx.to_id=dst.account_id,
+		block AS b
+		WHERE tx.block_num=b.block_num AND tx.tx_hash=$1 
 		`
 	row:=db.QueryRow(query,hash);
-	err:=row.Scan(&tx.Tx_id,&tx.From_id,&tx.To_id,&tx.From_addr,&tx.To_addr,&tx.Value,&tx.Tx_hash,&tx.Gas_limit,&tx.Gas_used,&tx.Gas_price,&tx.Nonce,&tx.Block_id,&tx.Block_num,&tx.Tx_index,&tx.Tx_status,&tx.V,&tx.R,&tx.S,&tx.Tx_error)
+	err:=row.Scan(&tx.Tx_id,&tx.From_id,&tx.To_id,&tx.Tx_timestamp,&tx.From_addr,&tx.To_addr,&tx.Value,&tx.Val_transferred,&tx.Tx_hash,&tx.Gas_limit,&tx.Gas_used,&tx.Gas_price,&tx.Nonce,&tx.Block_num,&tx.Tx_index,&tx.Tx_status,&tx.Num_vt,&tx.V,&tx.R,&tx.S,&tx.Tx_error,&tx.Vm_error)
 	if (err!=nil) {
 		if err==sql.ErrNoRows {
 			return tx,ErrNoRows;
@@ -679,8 +1433,64 @@ func Get_transaction(hash string) (Json_transaction_t,error) {
 	tx.Confirmations=last_block_num-tx.Block_num
 	return tx,nil
 }
+func Pending_transaction_watch(hash string) (Json_pending_tx_watch_t,error) {
+	var output Json_pending_tx_watch_t
+	var query string
+	query=`
+		SELECT  
+			(SELECT block_num AS tx_block_num FROM transaction WHERE tx_hash=$1),
+			(SELECT block_num AS last_block_num FROM last_block)
+		`
+	row:=db.QueryRow(query,hash);
+	var tmp_block_num sql.NullInt64
+	err:=row.Scan(&tmp_block_num,&output.Last_block_num)
+	if (err!=nil) {
+		if err==sql.ErrNoRows {
+			return output,ErrNoRows;
+		} else {
+			Error.Println(fmt.Sprintf("Scan failed at Pending_transaction_watch(): query=%v, %v",query,err))
+			os.Exit(2)
+		}
+	}
+	if tmp_block_num.Valid {
+		output.Processed_block_num=int(tmp_block_num.Int64)
+		if output.Processed_block_num>0 {
+			output.Confirmations=output.Last_block_num-output.Processed_block_num
+			output.Processed=true
+		}
+	}
+	output.Tx_hash=hash
+	return output,nil
+}
+func Get_eth_aet_prices() Json_eth_aet_prices_t {
+	var query string
+	var output Json_eth_aet_prices_t 
+
+	query=`SELECT symbol,round(price,2) as price FROM coins WHERE symbol IN ('ETH','AET')`
+	rows,err:=db.Query(query)
+	if err!=nil {
+		Error.Println(fmt.Sprintf("Error querying coin prices: %v",err))
+		os.Exit(2)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var price float32
+		var symbol string
+		err=rows.Scan(&symbol,&price)
+		if err!=nil {
+			Error.Println(fmt.Sprintf("Error at Scan() in price eth/aet loop :%v",err))
+			os.Exit(2)
+		}
+		if symbol=="ETH" {
+			output.Eth_price=price
+		}
+		if symbol=="AET" {
+			output.Aet_price=price
+		}
+	}
+	return output
+}
 func New_blocks_exist(block_num int) (bool,error) {
-// returns true if new blocks higher than asking block_num exist in the DB
 	var query string
 	query="SELECT block_num FROM block WHERE block_num>$1"
 	row := db.QueryRow(query,block_num)
@@ -840,15 +1650,31 @@ func get_last_block() int {
 		return -2
 	}
 }
-func lookup_account(addr_str string) (account_id int,owner_id int,last_balance string) {
+func lookup_account(addr_str string) (account_id int,owner_id int,last_balance string,err error) {
 	query:="SELECT account_id,owner_id,last_balance FROM account WHERE address=$1"
 	row:=db.QueryRow(query,addr_str);
-	err:=row.Scan(&account_id,&owner_id,&last_balance);
-	if (err==sql.ErrNoRows) {
-		return 0,0,"-1"
-	} else {
-		return account_id,owner_id,last_balance
+	err=row.Scan(&account_id,&owner_id,&last_balance);
+	if err!=nil {
+		if err==sql.ErrNoRows {
+			account_id=0
+			owner_id=0
+			last_balance="-1"
+			err=nil
+		}
 	}
+	return account_id,owner_id,last_balance,err
+}
+func lookup_token_account(addr_str string) (account_id int,err error) {
+	query:="SELECT account_id FROM tokacct WHERE address=$1"
+	row:=db.QueryRow(query,addr_str);
+	err=row.Scan(&account_id);
+	if err!=nil {
+		if err==sql.ErrNoRows {
+			account_id=0
+			err=nil
+		}
+	}
+	return account_id,err
 }
 func get_account_balance(account_id int) (string,error) {
 	var query string
@@ -865,4 +1691,23 @@ func get_account_balance(account_id int) (string,error) {
 		}
 	}
 	return balance_str,nil
+}
+func get_fungible_token_balance_query() string {
+	return `
+		SELECT 
+			tokop_id,tx_id,contract_id,block_num,block_ts,from_id,to_id,from_balance,to_balance,value,kind FROM
+		(
+			(
+				SELECT tokop_id,tx_id,contract_id,block_num,block_ts,from_id,to_id,from_balance,to_balance,value,kind
+				FROM tokop
+				WHERE contract_id=$1 AND from_id=$2
+			) UNION ALL (
+				SELECT tokop_id,tx_id,contract_id,block_num,block_ts,from_id,to_id,from_balance,to_balance,value,kind
+				FROM tokop
+				WHERE contract_id=$1 AND to_id=$2
+			)
+		) AS op
+		ORDER BY block_num DESC,tokop_id DESC
+		LIMIT 1
+	`
 }
